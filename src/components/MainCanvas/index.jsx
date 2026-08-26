@@ -10,7 +10,7 @@ import {
   UserRound,
 } from 'lucide-react';
 
-const SCENE_SOURCES = ['/scene.jpg', '/scene.jpg.png'];
+const SCENE_SOURCES = ['/scene-optimized.jpg'];
 const SCRATCH_THRESHOLD = 0.6;
 const BRUSH_SIZE = 100;
 

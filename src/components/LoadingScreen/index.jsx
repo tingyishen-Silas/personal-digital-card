@@ -2,14 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Brush } from 'lucide-react';
 
-const MIN_LOADING_TIME = 2500;
-const EXIT_DURATION = 2000;
-const MAX_LOADING_TIME = 6500;
+const MIN_LOADING_TIME = 900;
+const EXIT_DURATION = 500;
+const MAX_LOADING_TIME = 3500;
 const title = 'Silas’s Gallery';
 const paintColors = ['#C8956C', '#A0522D', '#D4A574', '#8B7355', '#E8D5B7'];
 const preloadResources = [
-  { type: 'image', src: '/loading.png' },
-  { type: 'image', src: '/scene.jpg' },
+  { type: 'image', src: '/loading-optimized.jpg' },
 ];
 
 function loadImage(src) {
@@ -116,7 +115,7 @@ function LoadingScreen({ onDone }) {
     >
       <img
         className="absolute inset-0 h-full w-full object-cover"
-        src="/loading.png"
+        src="/loading-optimized.jpg"
         alt=""
         draggable="false"
       />

@@ -5,3 +5,8 @@ dist/
 .env.*
 !.env.example
 public/music/*.flac
+public/loading.png
+public/scene.jpg
+public/scene.jpg.png
+public/portrait-silas.png
+public/music/cover-*.png

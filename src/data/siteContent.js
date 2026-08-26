@@ -4,7 +4,7 @@ export const musicList = [
     title: '鱼仔',
     artist: '卢广仲',
     mood: '适合悠闲的早晨',
-    cover: '/music/cover-04.png',
+    cover: '/music/cover-04.jpg',
     audio: {
       mp3: '/music/song-04.mp3',
     },
@@ -14,7 +14,7 @@ export const musicList = [
     title: 'Simon',
     artist: '周菲戈',
     mood: '适合浪漫的上午',
-    cover: '/music/cover-06.png',
+    cover: '/music/cover-06.jpg',
     audio: {
       mp3: '/music/song-06.mp3',
     },
@@ -24,7 +24,7 @@ export const musicList = [
     title: '一口',
     artist: '丁世光',
     mood: '适合休闲的下午',
-    cover: '/music/cover-02.png',
+    cover: '/music/cover-02.jpg',
     audio: {
       mp3: '/music/song-02.mp3',
     },
@@ -34,7 +34,7 @@ export const musicList = [
     title: '荔枝',
     artist: '裘德',
     mood: '适合温柔的傍晚',
-    cover: '/music/cover-01.png',
+    cover: '/music/cover-01.jpg',
     audio: {
       mp3: '/music/song-01.mp3',
     },
@@ -44,7 +44,7 @@ export const musicList = [
     title: '颜色',
     artist: 'Gareth.T 汤令山',
     mood: '适合忧郁的晚上',
-    cover: '/music/cover-05.png',
+    cover: '/music/cover-05.jpg',
     audio: {
       mp3: '/music/song-05.mp3',
     },
@@ -54,7 +54,7 @@ export const musicList = [
     title: '浓缩蓝鲸',
     artist: '裘德',
     mood: '适合静谧的深夜',
-    cover: '/music/cover-03.png',
+    cover: '/music/cover-03.jpg',
     audio: {
       mp3: '/music/song-03.mp3',
     },
@@ -76,7 +76,7 @@ export const aboutContent = {
     { label: '最近探索的方向', value: 'AI Agent' },
     { label: '最近计划要做的事', value: '看展、旅行、美食' },
   ],
-  artwork: '/portrait-silas.png',
+  artwork: '/portrait-silas-optimized.jpg',
 };
 
 export const topicList = [
