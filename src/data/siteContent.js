@@ -6,7 +6,6 @@ export const musicList = [
     mood: '适合悠闲的早晨',
     cover: '/music/cover-04.png',
     audio: {
-      flac: '/music/song-04.flac',
       mp3: '/music/song-04.mp3',
     },
   },
@@ -17,7 +16,6 @@ export const musicList = [
     mood: '适合浪漫的上午',
     cover: '/music/cover-06.png',
     audio: {
-      flac: '/music/song-06.flac',
       mp3: '/music/song-06.mp3',
     },
   },
@@ -28,7 +26,6 @@ export const musicList = [
     mood: '适合休闲的下午',
     cover: '/music/cover-02.png',
     audio: {
-      flac: '/music/song-02.flac',
       mp3: '/music/song-02.mp3',
     },
   },
@@ -39,7 +36,6 @@ export const musicList = [
     mood: '适合温柔的傍晚',
     cover: '/music/cover-01.png',
     audio: {
-      flac: '/music/song-01.flac',
       mp3: '/music/song-01.mp3',
     },
   },
@@ -50,7 +46,6 @@ export const musicList = [
     mood: '适合忧郁的晚上',
     cover: '/music/cover-05.png',
     audio: {
-      flac: '/music/song-05.flac',
       mp3: '/music/song-05.mp3',
     },
   },
@@ -61,7 +56,6 @@ export const musicList = [
     mood: '适合静谧的深夜',
     cover: '/music/cover-03.png',
     audio: {
-      flac: '/music/song-03.flac',
       mp3: '/music/song-03.mp3',
     },
   },

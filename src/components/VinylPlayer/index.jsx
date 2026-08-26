@@ -110,7 +110,7 @@ function VinylPlayer({ onClose, player }) {
               </div>
               {quality && (
                 <span className="quality-badge">
-                  {quality === 'flac' ? '无损 FLAC' : '兼容 MP3'}
+                  兼容 MP3
                 </span>
               )}
             </div>

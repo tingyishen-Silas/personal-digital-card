@@ -36,9 +36,7 @@ function formatPlaybackTime(seconds) {
 
 function useVinylAudio() {
   const audioRef = useRef(null);
-  const pendingFallbackRef = useRef(false);
   const currentIndexRef = useRef(null);
-  const qualityRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -50,10 +48,6 @@ function useVinylAudio() {
   useEffect(() => {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
-
-  useEffect(() => {
-    qualityRef.current = quality;
-  }, [quality]);
 
   useEffect(() => {
     const audio = new Audio();
@@ -70,18 +64,12 @@ function useVinylAudio() {
         const nextIndex = index === null ? 0 : (index + 1) % musicList.length;
         window.setTimeout(() => {
           const track = musicList[nextIndex];
-          const shouldUseFlac = Boolean(
-            audio.canPlayType('audio/flac') || audio.canPlayType('audio/x-flac'),
-          );
-
-          pendingFallbackRef.current = false;
           currentIndexRef.current = nextIndex;
-          qualityRef.current = shouldUseFlac ? 'flac' : 'mp3';
-          setQuality(qualityRef.current);
+          setQuality('mp3');
           setError(null);
           setCurrentTime(0);
           setDuration(0);
-          audio.src = shouldUseFlac ? track.audio.flac : track.audio.mp3;
+          audio.src = track.audio.mp3;
           audio.load();
           audio.play().catch(() => {
             setError('这张唱片暂时无法播放。');
@@ -94,20 +82,6 @@ function useVinylAudio() {
     const handleError = () => {
       const index = currentIndexRef.current;
       const track = index === null ? null : musicList[index];
-
-      if (track && qualityRef.current === 'flac' && !pendingFallbackRef.current) {
-        pendingFallbackRef.current = true;
-        audio.src = track.audio.mp3;
-        qualityRef.current = 'mp3';
-        setQuality('mp3');
-        setError(null);
-        audio.load();
-        audio.play().catch(() => {
-          setError('这张唱片暂时无法播放。');
-          setIsPlaying(false);
-        });
-        return;
-      }
 
       setError('这张唱片暂时无法播放。');
       setIsPlaying(false);
@@ -134,49 +108,26 @@ function useVinylAudio() {
     };
   }, []);
 
-  const supportsFlac = useCallback(() => {
-    const audio = audioRef.current || new Audio();
-    const nativeFlac = audio.canPlayType('audio/flac');
-    const xFlac = audio.canPlayType('audio/x-flac');
-    return Boolean(nativeFlac || xFlac);
-  }, []);
-
   const playTrack = useCallback((index) => {
     const audio = audioRef.current;
     const track = musicList[index];
     if (!audio || !track) return;
 
-    const shouldUseFlac = supportsFlac();
-    pendingFallbackRef.current = false;
     currentIndexRef.current = index;
-    qualityRef.current = shouldUseFlac ? 'flac' : 'mp3';
     setCurrentIndex(index);
-    setQuality(qualityRef.current);
+    setQuality('mp3');
     setError(null);
     setCurrentTime(0);
     setDuration(0);
 
-    audio.src = shouldUseFlac ? track.audio.flac : track.audio.mp3;
+    audio.src = track.audio.mp3;
     audio.volume = volume;
     audio.load();
     audio.play().catch(() => {
-      if (shouldUseFlac) {
-        pendingFallbackRef.current = true;
-        audio.src = track.audio.mp3;
-        qualityRef.current = 'mp3';
-        setQuality('mp3');
-        audio.load();
-        audio.play().catch(() => {
-          setError('这张唱片暂时无法播放。');
-          setIsPlaying(false);
-        });
-        return;
-      }
-
       setError('这张唱片暂时无法播放。');
       setIsPlaying(false);
     });
-  }, [supportsFlac, volume]);
+  }, [volume]);
 
   const togglePlayback = useCallback(() => {
     const audio = audioRef.current;
