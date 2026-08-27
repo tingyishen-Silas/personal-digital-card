@@ -1,12 +1,14 @@
+import { assetPath } from '../assetPath';
+
 export const musicList = [
   {
     id: 'song-04',
     title: '鱼仔',
     artist: '卢广仲',
     mood: '适合悠闲的早晨',
-    cover: '/music/cover-04.jpg',
+    cover: assetPath('/music/cover-04.jpg'),
     audio: {
-      mp3: '/music/song-04.mp3',
+      mp3: assetPath('/music/song-04.mp3'),
     },
   },
   {
@@ -14,9 +16,9 @@ export const musicList = [
     title: 'Simon',
     artist: '周菲戈',
     mood: '适合浪漫的上午',
-    cover: '/music/cover-06.jpg',
+    cover: assetPath('/music/cover-06.jpg'),
     audio: {
-      mp3: '/music/song-06.mp3',
+      mp3: assetPath('/music/song-06.mp3'),
     },
   },
   {
@@ -24,9 +26,9 @@ export const musicList = [
     title: '一口',
     artist: '丁世光',
     mood: '适合休闲的下午',
-    cover: '/music/cover-02.jpg',
+    cover: assetPath('/music/cover-02.jpg'),
     audio: {
-      mp3: '/music/song-02.mp3',
+      mp3: assetPath('/music/song-02.mp3'),
     },
   },
   {
@@ -34,9 +36,9 @@ export const musicList = [
     title: '荔枝',
     artist: '裘德',
     mood: '适合温柔的傍晚',
-    cover: '/music/cover-01.jpg',
+    cover: assetPath('/music/cover-01.jpg'),
     audio: {
-      mp3: '/music/song-01.mp3',
+      mp3: assetPath('/music/song-01.mp3'),
     },
   },
   {
@@ -44,9 +46,9 @@ export const musicList = [
     title: '颜色',
     artist: 'Gareth.T 汤令山',
     mood: '适合忧郁的晚上',
-    cover: '/music/cover-05.jpg',
+    cover: assetPath('/music/cover-05.jpg'),
     audio: {
-      mp3: '/music/song-05.mp3',
+      mp3: assetPath('/music/song-05.mp3'),
     },
   },
   {
@@ -54,9 +56,9 @@ export const musicList = [
     title: '浓缩蓝鲸',
     artist: '裘德',
     mood: '适合静谧的深夜',
-    cover: '/music/cover-03.jpg',
+    cover: assetPath('/music/cover-03.jpg'),
     audio: {
-      mp3: '/music/song-03.mp3',
+      mp3: assetPath('/music/song-03.mp3'),
     },
   },
 ];
@@ -76,7 +78,7 @@ export const aboutContent = {
     { label: '最近探索的方向', value: 'AI Agent' },
     { label: '最近计划要做的事', value: '看展、旅行、美食' },
   ],
-  artwork: '/portrait-silas-optimized.jpg',
+  artwork: assetPath('/portrait-silas-optimized.jpg'),
 };
 
 export const topicList = [
@@ -140,12 +142,79 @@ export const castleContent = {
   introduction: '把喜欢的瞬间，慢慢存成一张张小帖子。',
   posts: [
     {
-      id: 'castle-welcome',
-      date: '第一则',
-      title: '给梦想留一盏灯',
-      summary: '从这座小城堡开始。',
-      image: 'castle',
+      id: 'pudong-art-museum-2026',
+      date: '2026 · 上海',
+      title: '浦东美术馆',
+      summary: '乔治·莫兰迪《独白》展 & 让·努维尔《若无艺术家，建筑亦无存》',
+      image: assetPath('/castle/pudong-museum/01-morandi-posters.jpg'),
       featured: true,
+      gallery: [
+        {
+          src: assetPath('/castle/pudong-museum/01-morandi-posters.jpg'),
+          alt: '莫兰迪历年展览海报墙',
+          caption: '乔治·莫兰迪《独白》展',
+        },
+        {
+          src: assetPath('/castle/pudong-museum/03-still-life-room.jpg'),
+          alt: '莫兰迪静物作品与实物并置的展厅',
+          caption: '画中静物与真实器物的相遇',
+        },
+        {
+          src: assetPath('/castle/pudong-museum/07-small-work-large-space.jpg'),
+          alt: '展墙中央单独陈列的小幅作品',
+          caption: '一幅小画与大片留白',
+        },
+        {
+          src: assetPath('/castle/pudong-museum/08-morandi-nameplate.jpg'),
+          alt: '乔治·莫兰迪作品铭牌',
+          caption: 'Giorgio Morandi, 1890–1964',
+        },
+        {
+          src: assetPath('/castle/pudong-museum/04-vase-dialogue.jpg'),
+          alt: '花瓶画作与玻璃展柜中的花瓶',
+          caption: '从画布走向展柜的一束花',
+        },
+        {
+          src: assetPath('/castle/pudong-museum/02-morandi-quote-seeing.jpg'),
+          alt: '莫兰迪关于看见与描绘的展墙语句',
+          caption: '任何事物都可以被描绘，只要真正看见它。',
+        },
+        {
+          src: assetPath('/castle/pudong-museum/09-morandi-quote-nature.jpg'),
+          alt: '莫兰迪关于自然与可见世界的展墙语句',
+          caption: '表达自然，也表达可见的世界。',
+        },
+        {
+          src: assetPath('/castle/pudong-museum/10-morandi-quote-essence.jpg'),
+          alt: '莫兰迪关于触及事物本质的展墙语句',
+          caption: '触及核心，触及事物的本质。',
+        },
+        {
+          src: assetPath('/castle/pudong-museum/05-framed-landscape.jpg'),
+          alt: '金色画框中的莫兰迪风景作品',
+          caption: '被安静色块包围的风景',
+        },
+        {
+          src: assetPath('/castle/pudong-museum/06-etched-landscape.jpg'),
+          alt: '莫兰迪蚀刻风景作品',
+          caption: '线条里的山坡与树林',
+        },
+        {
+          src: assetPath('/castle/pudong-museum/11-jean-nouvel-entrance.jpg'),
+          alt: '让·努维尔展览入口与红色空间',
+          caption: '让·努维尔《若无艺术家，建筑亦无存》',
+        },
+        {
+          src: assetPath('/castle/pudong-museum/12-jean-nouvel-projection.jpg'),
+          alt: '让·努维尔展厅中的城市影像与工作台',
+          caption: '建筑影像与工作现场',
+        },
+        {
+          src: assetPath('/castle/pudong-museum/13-jean-nouvel-light.jpg'),
+          alt: '让·努维尔展览中的橙色光影装置',
+          caption: '空间、结构与一束橙色的光',
+        },
+      ],
     },
     {
       id: 'castle-draft-01',

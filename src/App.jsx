@@ -221,6 +221,7 @@ function App() {
   const ActiveModule = activeModule ? modules[activeModule] : null;
   const isVinylOpen = activeModule === 'vinyl';
   const isContactOpen = activeModule === 'contact';
+  const isCastleOpen = activeModule === 'castle';
 
   const openModule = useCallback((moduleId) => {
     lastFocusedElementRef.current = document.activeElement;
@@ -333,6 +334,8 @@ function App() {
                   ? 'h-[680px] w-[1000px] max-h-[88vh] max-w-[92vw] rounded-[10px]'
                   : isContactOpen
                     ? 'contact-dialog-panel rounded-[8px]'
+                    : isCastleOpen
+                      ? 'castle-dialog-panel rounded-[8px]'
                     : 'h-[72vh] w-[72vw] max-w-5xl rounded-[8px]',
               ].join(' ')}
               initial={{ y: 24, scale: 0.96, opacity: 0, filter: 'blur(14px)' }}

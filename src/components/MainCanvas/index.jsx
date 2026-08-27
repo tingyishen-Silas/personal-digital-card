@@ -9,8 +9,9 @@ import {
   Palette,
   UserRound,
 } from 'lucide-react';
+import { assetPath } from '../../assetPath';
 
-const SCENE_SOURCES = ['/scene-optimized.jpg'];
+const SCENE_SOURCES = [assetPath('/scene-optimized.jpg')];
 const SCRATCH_THRESHOLD = 0.6;
 const BRUSH_SIZE = 100;
 
