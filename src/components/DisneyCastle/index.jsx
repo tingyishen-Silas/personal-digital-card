@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -15,10 +15,12 @@ import {
 import { castleContent } from '../../data/siteContent';
 import castleWatercolor from '../../assets/castle-watercolor.png';
 
-function DisneyCastle() {
+function DisneyCastle({ onArchiveChange }) {
   const [isNight, setIsNight] = useState(true);
   const [selectedPost, setSelectedPost] = useState(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const archiveTriggerRef = useRef(null);
+  const shouldRestoreArchiveFocusRef = useRef(false);
   const selectedGallery = selectedPost?.gallery || [];
   const selectedImage = selectedGallery[selectedImageIndex];
 
@@ -27,10 +29,45 @@ function DisneyCastle() {
     setSelectedImageIndex(0);
   };
 
-  const closeArchive = () => {
+  const closeArchive = useCallback(() => {
+    shouldRestoreArchiveFocusRef.current = true;
     setSelectedPost(null);
     setSelectedImageIndex(0);
-  };
+  }, []);
+
+  useEffect(() => {
+    onArchiveChange?.(Boolean(selectedPost));
+
+    if (!selectedPost && shouldRestoreArchiveFocusRef.current) {
+      const focusTimer = window.setTimeout(() => {
+        archiveTriggerRef.current?.focus();
+        shouldRestoreArchiveFocusRef.current = false;
+      }, 360);
+      return () => window.clearTimeout(focusTimer);
+    }
+
+    return undefined;
+  }, [onArchiveChange, selectedPost]);
+
+  useEffect(() => {
+    if (!selectedPost) return undefined;
+
+    const focusTimer = window.requestAnimationFrame(() => {
+      document.querySelector('[data-archive-return]')?.focus();
+    });
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeArchive();
+    };
+
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.cancelAnimationFrame(focusTimer);
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [closeArchive, selectedPost]);
 
   const showPreviousImage = () => {
     setSelectedImageIndex((index) => (
@@ -120,6 +157,7 @@ function DisneyCastle() {
                 <PostElement
                   className={`castle-post ${post.draft ? 'is-draft' : ''} ${post.featured ? 'is-featured' : ''} ${post.gallery ? 'is-openable' : ''}`}
                   key={post.id}
+                  ref={post.gallery ? archiveTriggerRef : undefined}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.12 + index * 0.08, duration: 0.35 }}
@@ -169,6 +207,7 @@ function DisneyCastle() {
           >
             <motion.section
               className="castle-archive-panel absolute z-40 flex min-h-0 flex-col overflow-hidden"
+              data-modal-focus-scope
               aria-label={`${selectedPost.title}档案`}
               initial={{ opacity: 0, scale: 0.97, y: 12, filter: 'blur(8px)' }}
               animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
@@ -176,7 +215,7 @@ function DisneyCastle() {
               transition={{ duration: 0.32, ease: 'easeOut' }}
             >
               <header className="castle-archive-header flex items-center justify-between gap-5">
-                <button className="castle-archive-back" type="button" onClick={closeArchive}>
+                <button className="castle-archive-back" data-archive-return type="button" onClick={closeArchive}>
                   <ArrowLeft aria-hidden="true" size={17} strokeWidth={1.7} />
                   <span>返回小记</span>
                 </button>

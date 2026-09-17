@@ -39,19 +39,23 @@ function getCoverGeometry(containerWidth, containerHeight, imageWidth, imageHeig
   };
 }
 
-function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
+function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onSceneReady }) {
   const shellRef = useRef(null);
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef(null);
-  const hasCompletedRef = useRef(false);
+  const hasVisitedRef = useRef(window.sessionStorage.getItem('silas-gallery-visited') === 'true');
+  const hasCompletedRef = useRef(hasVisitedRef.current);
   const progressCheckRef = useRef(0);
+  const scratchPointsRef = useRef([]);
+  const hasReportedSceneReadyRef = useRef(false);
 
   const [sceneSrcIndex, setSceneSrcIndex] = useState(0);
   const [imageMeta, setImageMeta] = useState(null);
-  const [isComplete, setIsComplete] = useState(false);
-  const [isExploreReady, setIsExploreReady] = useState(false);
+  const [sceneUnavailable, setSceneUnavailable] = useState(false);
+  const [isComplete, setIsComplete] = useState(() => hasVisitedRef.current);
+  const [isExploreReady, setIsExploreReady] = useState(() => hasVisitedRef.current);
   const [hasScratched, setHasScratched] = useState(false);
   const [hotspotRects, setHotspotRects] = useState([]);
   const [hoveredModule, setHoveredModule] = useState(null);
@@ -60,6 +64,12 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
 
   const sceneSrc = SCENE_SOURCES[sceneSrcIndex];
   const debugMode = useMemo(() => new URLSearchParams(window.location.search).get('debug') === '1', []);
+
+  const reportSceneReady = useCallback(() => {
+    if (hasReportedSceneReadyRef.current) return;
+    hasReportedSceneReadyRef.current = true;
+    onSceneReady?.();
+  }, [onSceneReady]);
 
   const resizeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -99,6 +109,29 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
 
     context.putImageData(pixels, 0, 0);
 
+    if (!hasCompletedRef.current && scratchPointsRef.current.length > 0) {
+      context.save();
+      context.globalCompositeOperation = 'destination-out';
+      scratchPointsRef.current.forEach((point) => {
+        const gradient = context.createRadialGradient(
+          point.x * width,
+          point.y * height,
+          BRUSH_SIZE * 0.1,
+          point.x * width,
+          point.y * height,
+          BRUSH_SIZE * 0.58,
+        );
+        gradient.addColorStop(0, 'rgba(0,0,0,0.98)');
+        gradient.addColorStop(0.68, 'rgba(0,0,0,0.82)');
+        gradient.addColorStop(1, 'rgba(0,0,0,0)');
+        context.fillStyle = gradient;
+        context.beginPath();
+        context.arc(point.x * width, point.y * height, BRUSH_SIZE * 0.58, 0, Math.PI * 2);
+        context.fill();
+      });
+      context.restore();
+    }
+
     const nextRects = hotspots.map((hotspot) => {
       const rect = {
         left: cover.offsetX + (hotspot.bounds.x1 / 100) * cover.renderWidth,
@@ -125,6 +158,7 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
     if (!canvas || !shell) return;
 
     hasCompletedRef.current = true;
+    window.sessionStorage.setItem('silas-gallery-visited', 'true');
     isDrawingRef.current = false;
     setIsComplete(true);
 
@@ -165,6 +199,16 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
       },
     });
   }, []);
+
+  const resetColoring = useCallback(() => {
+    hasCompletedRef.current = false;
+    scratchPointsRef.current = [];
+    window.sessionStorage.removeItem('silas-gallery-visited');
+    setHasScratched(false);
+    setIsComplete(false);
+    setIsExploreReady(false);
+    window.requestAnimationFrame(resizeCanvas);
+  }, [resizeCanvas]);
 
   const openModule = useCallback((moduleId) => {
     setHintedModule(null);
@@ -264,6 +308,7 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
     const point = getLocalPoint(event);
     isDrawingRef.current = true;
     lastPointRef.current = point;
+    scratchPointsRef.current = [{ x: point.x / event.currentTarget.clientWidth, y: point.y / event.currentTarget.clientHeight }];
     setHasScratched(true);
     stampBrush(point.x, point.y);
     checkProgress();
@@ -274,6 +319,12 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
     const point = getLocalPoint(event);
     scratchBetween(lastPointRef.current || point, point);
     lastPointRef.current = point;
+    if (scratchPointsRef.current.length < 360) {
+      scratchPointsRef.current.push({
+        x: point.x / event.currentTarget.clientWidth,
+        y: point.y / event.currentTarget.clientHeight,
+      });
+    }
     checkProgress();
   }, [activeModule, checkProgress, getLocalPoint, isComplete, scratchBetween]);
 
@@ -286,8 +337,14 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
   }, []);
 
   const handleImageError = useCallback(() => {
-    setSceneSrcIndex((index) => Math.min(index + 1, SCENE_SOURCES.length - 1));
-  }, []);
+    if (sceneSrcIndex < SCENE_SOURCES.length - 1) {
+      setSceneSrcIndex((index) => index + 1);
+      return;
+    }
+
+    setSceneUnavailable(true);
+    reportSceneReady();
+  }, [reportSceneReady, sceneSrcIndex]);
 
   useEffect(() => {
     if (!shellRef.current) return;
@@ -300,53 +357,53 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
   }, []);
 
   useEffect(() => {
-    const image = new Image();
-    image.src = sceneSrc;
-    image.onload = () => {
-      setImageMeta({ width: image.naturalWidth, height: image.naturalHeight });
-      window.requestAnimationFrame(resizeCanvas);
-    };
-  }, [resizeCanvas, sceneSrc]);
-
-  useEffect(() => {
     window.addEventListener('resize', resizeCanvas);
     return () => window.removeEventListener('resize', resizeCanvas);
   }, [resizeCanvas]);
 
   useEffect(() => {
-    if (!isExploreReady || hotspotRects.length === 0) return undefined;
+    if (!imageMeta || hotspotRects.length === 0) return undefined;
 
     const context = gsap.context(() => {
-      gsap.fromTo(
-        '.main-canvas-hotspot',
-        { opacity: 0, scale: 0.96 },
-        {
-          opacity: 1,
-          scale: 1,
-          duration: 0.42,
-          stagger: 0.16,
-          ease: 'power2.out',
-        },
-      );
-      gsap.fromTo(
-        '.gallery-identity',
-        { opacity: 0, x: -12 },
-        { opacity: 1, x: 0, duration: 0.7, delay: 0.12, ease: 'power2.out' },
-      );
-      gsap.fromTo(
-        '.gallery-index',
-        { opacity: 0, y: 16 },
-        { opacity: 1, y: 0, duration: 0.58, delay: 0.24, ease: 'power3.out' },
-      );
-      gsap.fromTo(
-        '.gallery-index-item',
-        { opacity: 0, y: 7 },
-        { opacity: 1, y: 0, duration: 0.34, delay: 0.44, stagger: 0.07, ease: 'power2.out' },
-      );
+      const select = gsap.utils.selector(shellRef);
+      const animate = (selector, from, to) => {
+        const targets = select(selector);
+        if (targets.length) gsap.fromTo(targets, from, to);
+      };
+
+      animate('.main-canvas-hotspot', { opacity: 0, scale: 0.96 }, {
+        opacity: 1,
+        scale: 1,
+        duration: 0.42,
+        stagger: 0.16,
+        ease: 'power2.out',
+      });
+      animate('.gallery-identity', { opacity: 0, x: -12 }, {
+        opacity: 1,
+        x: 0,
+        duration: 0.7,
+        delay: 0.12,
+        ease: 'power2.out',
+      });
+      animate('.gallery-index', { opacity: 0, y: 16 }, {
+        opacity: 1,
+        y: 0,
+        duration: 0.58,
+        delay: 0.24,
+        ease: 'power3.out',
+      });
+      animate('.gallery-index-item', { opacity: 0, y: 7 }, {
+        opacity: 1,
+        y: 0,
+        duration: 0.34,
+        delay: 0.44,
+        stagger: 0.07,
+        ease: 'power2.out',
+      });
     }, shellRef);
 
     return () => context.revert();
-  }, [hotspotRects.length, isExploreReady]);
+  }, [hotspotRects.length, imageMeta]);
 
   useEffect(() => {
     if (!isExploreReady || visitedModules.size > 0) return undefined;
@@ -379,6 +436,7 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
             height: imageRef.current.naturalHeight,
           });
           resizeCanvas();
+          reportSceneReady();
         }}
         onError={handleImageError}
       />
@@ -393,17 +451,15 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
         onPointerCancel={handlePointerUp}
       />
 
-      {!isComplete && (
-        <button
-          className="paint-action-button group absolute bottom-8 right-8 z-20"
-          type="button"
-          aria-label="一键上色"
-          onClick={() => completeColoring(true)}
-        >
-          <Palette aria-hidden="true" size={23} strokeWidth={1.7} />
-          <span className="paint-action-tooltip">一键上色</span>
-        </button>
-      )}
+      <button
+        className="paint-action-button group absolute bottom-8 right-8 z-20"
+        type="button"
+        aria-label={isComplete ? '重新上色' : '一键上色'}
+        onClick={() => (isComplete ? resetColoring() : completeColoring(true))}
+      >
+        <Palette aria-hidden="true" size={23} strokeWidth={1.7} />
+        <span className="paint-action-tooltip">{isComplete ? '重新上色' : '一键上色'}</span>
+      </button>
 
       {!isComplete && (
         <div
@@ -413,7 +469,7 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
           ].join(' ')}
         >
           <Paintbrush aria-hidden="true" size={18} strokeWidth={1.7} />
-          <span>按住鼠标,为这幅画上色吧</span>
+          <span>按住鼠标，为这幅画上色；也可直接从底部进入</span>
         </div>
       )}
 
@@ -457,14 +513,14 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule }) {
         </div>
       )}
 
-      {isExploreReady && (
+      {(imageMeta || sceneUnavailable) && (
         <div className="gallery-identity pointer-events-none absolute left-8 top-7 z-[25]">
           <span className="gallery-identity-title block font-title italic">Silas’s Gallery</span>
           <span className="gallery-identity-subtitle block">Personal digital card</span>
         </div>
       )}
 
-      {isExploreReady && (
+      {(imageMeta || sceneUnavailable) && (
         <div className="gallery-index-anchor pointer-events-none absolute inset-x-0 bottom-6 z-[25] flex justify-center">
           <nav className="gallery-index pointer-events-auto flex" aria-label="画廊入口">
             {hotspots.map(({ id, label, icon: Icon }) => (

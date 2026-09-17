@@ -1,21 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import LoadingScreen from './components/LoadingScreen';
 import MainCanvas from './components/MainCanvas';
-import VinylPlayer from './components/VinylPlayer';
-import DisneyCastle from './components/DisneyCastle';
-import TopicsTable from './components/TopicsTable';
-import ContactMailbox from './components/ContactMailbox';
-import AboutEasel from './components/AboutEasel';
 import { musicList } from './data/siteContent';
 
 const modules = {
-  vinyl: VinylPlayer,
-  castle: DisneyCastle,
-  topics: TopicsTable,
-  contact: ContactMailbox,
-  about: AboutEasel,
+  vinyl: lazy(() => import('./components/VinylPlayer')),
+  castle: lazy(() => import('./components/DisneyCastle')),
+  topics: lazy(() => import('./components/TopicsTable')),
+  contact: lazy(() => import('./components/ContactMailbox')),
+  about: lazy(() => import('./components/AboutEasel')),
 };
 
 const moduleLabels = {
@@ -214,6 +209,8 @@ function useVinylAudio() {
 function App() {
   const [activeModule, setActiveModule] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSceneReady, setIsSceneReady] = useState(false);
+  const [hasNestedOverlay, setHasNestedOverlay] = useState(false);
   const modalRef = useRef(null);
   const lastFocusedElementRef = useRef(null);
   const isKeyboardInteractionRef = useRef(false);
@@ -230,6 +227,7 @@ function App() {
 
   const closeModule = useCallback(() => {
     setActiveModule(null);
+    setHasNestedOverlay(false);
     window.requestAnimationFrame(() => {
       if (isKeyboardInteractionRef.current) {
         lastFocusedElementRef.current?.focus?.({ preventScroll: true });
@@ -258,7 +256,8 @@ function App() {
     if (!ActiveModule) return undefined;
 
     const focusModal = () => {
-      const firstFocusable = modalRef.current?.querySelector(
+      const focusScope = modalRef.current?.querySelector('[data-modal-focus-scope]') || modalRef.current;
+      const firstFocusable = focusScope?.querySelector(
         'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
       );
       firstFocusable?.focus();
@@ -266,6 +265,7 @@ function App() {
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
+        if (hasNestedOverlay) return;
         event.preventDefault();
         closeModule();
         return;
@@ -273,7 +273,8 @@ function App() {
 
       if (event.key !== 'Tab') return;
 
-      const focusable = [...(modalRef.current?.querySelectorAll(
+      const focusScope = modalRef.current?.querySelector('[data-modal-focus-scope]') || modalRef.current;
+      const focusable = [...(focusScope?.querySelectorAll(
         'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
       ) || [])];
 
@@ -301,7 +302,7 @@ function App() {
       window.cancelAnimationFrame(focusTimer);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [ActiveModule, closeModule]);
+  }, [ActiveModule, closeModule, hasNestedOverlay]);
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-cream font-body text-sienna">
@@ -309,8 +310,9 @@ function App() {
         activeModule={activeModule}
         isMusicPlaying={vinylPlayer.isPlaying}
         onOpenModule={openModule}
+        onSceneReady={() => setIsSceneReady(true)}
       />
-      {isLoading && <LoadingScreen onDone={() => setIsLoading(false)} />}
+      {isLoading && <LoadingScreen isSceneReady={isSceneReady} onDone={() => setIsLoading(false)} />}
 
       <AnimatePresence>
         {ActiveModule && (
@@ -343,7 +345,13 @@ function App() {
               exit={{ y: 16, scale: 0.98, opacity: 0, filter: 'blur(10px)' }}
               transition={{ duration: 0.42, ease: 'easeOut' }}
             >
-              <ActiveModule onClose={closeModule} player={vinylPlayer} />
+              <Suspense fallback={<div className="gallery-module-loading">正在打开...</div>}>
+                <ActiveModule
+                  onArchiveChange={setHasNestedOverlay}
+                  onClose={closeModule}
+                  player={vinylPlayer}
+                />
+              </Suspense>
               {!isVinylOpen && (
                 <button
                   className="studio-close-button absolute right-5 top-5 z-50"

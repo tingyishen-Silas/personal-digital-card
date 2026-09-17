@@ -4,7 +4,7 @@ import { Brush } from 'lucide-react';
 import { assetPath } from '../../assetPath';
 
 const MIN_LOADING_TIME = 900;
-const EXIT_DURATION = 500;
+const EXIT_DURATION = 650;
 const MAX_LOADING_TIME = 3500;
 const title = 'Silas’s Gallery';
 const paintColors = ['#C8956C', '#A0522D', '#D4A574', '#8B7355', '#E8D5B7'];
@@ -22,7 +22,7 @@ function loadImage(src) {
   });
 }
 
-function LoadingScreen({ onDone }) {
+function LoadingScreen({ isSceneReady, onDone }) {
   const startTimeRef = useRef(performance.now());
   const [loadedCount, setLoadedCount] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -30,8 +30,9 @@ function LoadingScreen({ onDone }) {
   const [hasTimedOut, setHasTimedOut] = useState(false);
 
   const targetProgress = useMemo(() => {
-    return Math.round((loadedCount / preloadResources.length) * 100);
-  }, [loadedCount]);
+    const completeSteps = loadedCount + (isSceneReady ? 1 : 0);
+    return Math.round((completeSteps / (preloadResources.length + 1)) * 100);
+  }, [isSceneReady, loadedCount]);
 
   useEffect(() => {
     let isMounted = true;
@@ -89,7 +90,7 @@ function LoadingScreen({ onDone }) {
   }, [hasTimedOut, isExiting, targetProgress]);
 
   useEffect(() => {
-    if (isExiting || loadedCount < preloadResources.length || progress < 99.5) return;
+    if (isExiting || loadedCount < preloadResources.length || !isSceneReady || progress < 99.5) return;
 
     const elapsed = performance.now() - startTimeRef.current;
     const delay = Math.max(0, MIN_LOADING_TIME - elapsed);
@@ -100,7 +101,7 @@ function LoadingScreen({ onDone }) {
     }, delay);
 
     return () => window.clearTimeout(exitTimer);
-  }, [isExiting, loadedCount, onDone, progress]);
+  }, [isExiting, isSceneReady, loadedCount, onDone, progress]);
 
   const displayedProgress = Math.min(100, Math.round(progress));
   const activePaints = Math.ceil((displayedProgress / 100) * paintColors.length);
