@@ -537,31 +537,11 @@ input:focus-visible {
   transition: color 180ms ease, filter 180ms ease;
 }
 
-.gallery-index-item.is-visited svg,
 .gallery-index-item:hover svg,
 .gallery-index-item:focus-visible svg,
 .gallery-index-item.is-active svg {
   color: var(--color-warm-gold);
   filter: drop-shadow(0 0 5px rgba(212, 165, 116, 0.4));
-}
-
-.gallery-index-item i {
-  position: absolute;
-  right: 7px;
-  top: 7px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--color-warm-gold);
-  box-shadow: 0 0 7px rgba(212, 165, 116, 0.7);
-  opacity: 0;
-  transform: scale(0.4);
-  transition: opacity 180ms ease, transform 180ms ease;
-}
-
-.gallery-index-item.is-visited i {
-  opacity: 1;
-  transform: scale(1);
 }
 
 .gallery-index-item.is-hinted {
@@ -2284,11 +2264,6 @@ input:focus-visible {
     line-height: 1.1;
     text-align: center;
     white-space: normal;
-  }
-
-  .gallery-index-item i {
-    right: 4px;
-    top: 4px;
   }
 
   .painting-hint {

@@ -529,7 +529,6 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
                   'gallery-index-item',
                   hoveredModule === id ? 'is-active' : '',
                   hintedModule === id ? 'is-hinted' : '',
-                  visitedModules.has(id) ? 'is-visited' : '',
                 ].join(' ')}
                 type="button"
                 key={id}
@@ -545,7 +544,6 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
               >
                 <Icon aria-hidden="true" size={17} strokeWidth={1.55} />
                 <span>{label}</span>
-                <i aria-hidden="true" />
               </button>
             ))}
           </nav>
