@@ -49,7 +49,7 @@ function AboutEasel() {
                 <Sparkles aria-hidden="true" size={15} strokeWidth={1.8} />
                 <span>About</span>
               </div>
-              <h2 className="mt-3 whitespace-nowrap font-title text-[46px] italic leading-none text-sienna">一幅自画像</h2>
+              <h2 className="mt-3 whitespace-nowrap font-title text-[42px] italic leading-none text-sienna">一幅自画像</h2>
             </div>
             <span className="about-role shrink-0 whitespace-nowrap">{aboutContent.role}</span>
           </div>
@@ -61,15 +61,6 @@ function AboutEasel() {
           <div className="mt-6 flex flex-wrap gap-2">
             {aboutContent.keywords.map((keyword) => (
               <span className="about-keyword" key={keyword}>{keyword}</span>
-            ))}
-          </div>
-
-          <div className="about-notes mt-7 grid grid-cols-2 gap-x-6">
-            {aboutContent.notes.map((note, index) => (
-              <div className="about-note py-3" key={note.label}>
-                <span className="block text-xs text-taupe">0{index + 1} / {note.label}</span>
-                <span className="mt-1 block text-sm leading-5 text-[#4e4034]">{note.value}</span>
-              </div>
             ))}
           </div>
 

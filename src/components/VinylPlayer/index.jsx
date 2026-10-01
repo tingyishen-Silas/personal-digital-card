@@ -19,7 +19,6 @@ function VinylPlayer({ onClose, player }) {
     duration,
     currentTime,
     volume,
-    quality,
     error,
     playTrack,
     togglePlayback,
@@ -108,11 +107,6 @@ function VinylPlayer({ onClose, player }) {
                   {currentTrack?.artist || '让这幅画有声音'}
                 </div>
               </div>
-              {quality && (
-                <span className="quality-badge">
-                  兼容 MP3
-                </span>
-              )}
             </div>
 
             {error && <p className="mt-3 text-sm text-[#E8C6B7]">{error}</p>}
@@ -174,7 +168,7 @@ function VinylPlayer({ onClose, player }) {
               </span>
               <h2 className="font-title text-3xl italic text-sienna">Records</h2>
             </div>
-            <span className="text-xs uppercase text-taupe">6 albums</span>
+            <span className="text-xs uppercase text-taupe">{musicList.length} tracks</span>
           </div>
 
           <div className="record-shelf grid min-h-0 flex-1 auto-rows-[76px] gap-2 overflow-y-auto pr-2">

@@ -1,4 +1,4 @@
-import { assetPath } from '../assetPath';
+import { assetPath } from '../assetPath.js';
 
 export const musicList = [
   {
@@ -132,7 +132,7 @@ export const contactContent = {
   location: 'Shanghai, China',
   channels: [
     { id: 'email', label: 'Email', value: 'tingyi_shen@163.com', hint: '最适合认真写一封信' },
-    { id: 'social', label: 'Social', value: '南山逸（278704142）', hint: '小红书' },
+    { id: 'social', label: 'Social', value: '南山逸（278704142）', hint: '小红书', copyValue: '278704142' },
     { id: 'portfolio', label: 'Portfolio', value: '正在慢慢整理', hint: '作品集' },
   ],
 };

@@ -3,12 +3,15 @@ import { motion } from 'framer-motion';
 import {
   AtSign,
   Compass,
+  Check,
+  Copy,
   Heart,
   Mail,
   MapPin,
   Send,
 } from 'lucide-react';
 import { contactContent } from '../../data/siteContent';
+import useCopyFeedback from '../../useCopyFeedback';
 
 const channelIcons = {
   email: AtSign,
@@ -19,6 +22,7 @@ const channelIcons = {
 function ContactMailbox() {
   const [isLetterOpen, setIsLetterOpen] = useState(true);
   const mailtoHref = `mailto:${contactContent.address}`;
+  const { copy, feedback } = useCopyFeedback();
 
   return (
     <section className="contact-mailbox relative h-full w-full overflow-hidden p-8 text-sienna">
@@ -90,6 +94,11 @@ function ContactMailbox() {
 
           <p className="contact-introduction relative z-10 mt-8 max-w-md text-[15px] leading-8 text-[#594838]">{contactContent.introduction}</p>
 
+          <a className="contact-letter-send relative z-10" href={mailtoHref} onClick={() => setIsLetterOpen(false)}>
+            <Send aria-hidden="true" size={16} />
+            <span>投递一封信</span>
+          </a>
+
           <div className="contact-channels relative z-10 mt-7 grid gap-2">
             {contactContent.channels.map((channel, index) => {
               const ChannelIcon = channelIcons[channel.id];
@@ -104,12 +113,29 @@ function ContactMailbox() {
                   <span className="contact-channel-icon"><ChannelIcon aria-hidden="true" size={16} strokeWidth={1.7} /></span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs text-taupe">{channel.label} / {channel.hint}</span>
-                    <span className="mt-0.5 block text-sm text-sienna">{channel.value}</span>
+                    {channel.id === 'email' ? (
+                      <a className="contact-address mt-0.5 block text-sm text-sienna" href={mailtoHref}>{channel.value}</a>
+                    ) : (
+                      <span className="mt-0.5 block text-sm text-sienna">{channel.value}</span>
+                    )}
                   </span>
+                  {(channel.id === 'email' || channel.copyValue) && (
+                    <button
+                      className="contact-copy-button"
+                      type="button"
+                      aria-label={channel.id === 'email' ? '复制邮箱' : '复制小红书号'}
+                      title={channel.id === 'email' ? '复制邮箱' : '复制小红书号'}
+                      onClick={() => copy(channel.id, channel.copyValue || contactContent.address, channel.id === 'email' ? '邮箱' : '小红书号')}
+                    >
+                      {feedback.id === channel.id ? <Check aria-hidden="true" size={17} /> : <Copy aria-hidden="true" size={17} />}
+                    </button>
+                  )}
                 </motion.div>
               );
             })}
           </div>
+
+          <p className="copy-feedback relative z-10" role="status" aria-live="polite">{feedback.message}</p>
 
           <div className="contact-letter-footer relative z-10 mt-auto flex items-end justify-between gap-6 pt-6">
             <span className="max-w-[17rem] text-sm italic leading-6 text-[#745a42]">{contactContent.note}</span>

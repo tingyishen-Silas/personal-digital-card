@@ -22,7 +22,7 @@ function loadImage(src) {
   });
 }
 
-function LoadingScreen({ isSceneReady, onDone }) {
+function LoadingScreen({ compact = false, isSceneReady, onDone }) {
   const startTimeRef = useRef(performance.now());
   const [loadedCount, setLoadedCount] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -38,7 +38,8 @@ function LoadingScreen({ isSceneReady, onDone }) {
     let isMounted = true;
     const loadedResources = new Set();
 
-    preloadResources.forEach((resource) => {
+    if (compact) setLoadedCount(preloadResources.length);
+    (compact ? [] : preloadResources).forEach((resource) => {
       if (resource.type === 'image') {
         loadImage(resource.src).then((result) => {
           if (!result.ok) {
@@ -64,17 +65,18 @@ function LoadingScreen({ isSceneReady, onDone }) {
       isMounted = false;
       window.clearTimeout(fallbackTimer);
     };
-  }, []);
+  }, [compact]);
 
   useEffect(() => {
     let frameId;
 
     const tick = () => {
       const elapsed = performance.now() - startTimeRef.current;
-      const timeProgress = Math.min(100, (elapsed / MIN_LOADING_TIME) * 100);
+      const timeProgress = Math.min(100, (elapsed / (compact ? 160 : MIN_LOADING_TIME)) * 100);
       const nextProgress = hasTimedOut ? 100 : Math.min(targetProgress, timeProgress);
 
       setProgress((current) => {
+        if (compact) return nextProgress;
         const eased = current + (nextProgress - current) * 0.12;
         if (Math.abs(eased - nextProgress) < 0.2) return nextProgress;
         return eased;
@@ -87,29 +89,48 @@ function LoadingScreen({ isSceneReady, onDone }) {
 
     frameId = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(frameId);
-  }, [hasTimedOut, isExiting, targetProgress]);
+  }, [compact, hasTimedOut, isExiting, targetProgress]);
 
   useEffect(() => {
-    if (isExiting || loadedCount < preloadResources.length || !isSceneReady || progress < 99.5) return;
+    if (isExiting || loadedCount < preloadResources.length || (!isSceneReady && !hasTimedOut) || progress < 99.5) return;
 
     const elapsed = performance.now() - startTimeRef.current;
-    const delay = Math.max(0, MIN_LOADING_TIME - elapsed);
+    const delay = Math.max(0, (compact ? 160 : MIN_LOADING_TIME) - elapsed);
     const exitTimer = window.setTimeout(() => {
       setProgress(100);
       setIsExiting(true);
-      window.setTimeout(onDone, EXIT_DURATION);
     }, delay);
 
     return () => window.clearTimeout(exitTimer);
-  }, [isExiting, isSceneReady, loadedCount, onDone, progress]);
+  }, [compact, hasTimedOut, isExiting, isSceneReady, loadedCount, progress]);
+
+  useEffect(() => {
+    if (!isExiting) return undefined;
+    const doneTimer = window.setTimeout(onDone, compact ? 180 : EXIT_DURATION);
+    return () => window.clearTimeout(doneTimer);
+  }, [compact, isExiting, onDone]);
 
   const displayedProgress = Math.min(100, Math.round(progress));
   const activePaints = Math.ceil((displayedProgress / 100) * paintColors.length);
 
+  if (compact) {
+    return (
+      <motion.div
+        className="gallery-return-loading fixed inset-0 z-50 grid place-items-center"
+        role="status"
+        aria-label="画廊加载中"
+        animate={{ opacity: isExiting ? 0 : 1 }}
+        transition={{ duration: 0.18 }}
+      >
+        <span className="font-title italic">Silas’s Gallery</span>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.section
       className={[
-        'fixed inset-0 z-50 h-screen w-screen overflow-hidden bg-[#dce8ef] text-[#6B7B8C]',
+        'gallery-loading-screen fixed inset-0 z-50 h-screen w-screen overflow-hidden bg-[#dce8ef] text-[#6B7B8C]',
         isExiting ? 'loading-screen-exit pointer-events-none' : '',
       ].join(' ')}
       initial={{ opacity: 1 }}
@@ -125,14 +146,14 @@ function LoadingScreen({ isSceneReady, onDone }) {
       <div className="absolute inset-0 bg-white/10" />
 
       <div className="relative z-10 flex h-full w-full flex-col items-center justify-center px-10">
-        <h1 className="font-title text-[clamp(64px,8vw,132px)] italic leading-none tracking-normal">
+        <h1 className="loading-title font-title italic leading-none tracking-normal">
           {title.split('').map((char, index) => (
             <motion.span
               className="inline-block"
               key={`${char}-${index}`}
               initial={{ opacity: 0, filter: 'blur(8px)', y: 10 }}
               animate={{ opacity: 1, filter: 'blur(0px)', y: 0 }}
-              transition={{ delay: index * 0.1, duration: 0.75, ease: 'easeOut' }}
+              transition={{ delay: index * 0.03, duration: 0.6, ease: 'easeOut' }}
             >
               {char === ' ' ? '\u00A0' : char}
             </motion.span>
@@ -143,7 +164,7 @@ function LoadingScreen({ isSceneReady, onDone }) {
           className="mt-7 text-base tracking-normal text-[#6B7B8C]/90"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: title.length * 0.1 + 0.5, duration: 0.8, ease: 'easeOut' }}
+          transition={{ delay: 0.3, duration: 0.6, ease: 'easeOut' }}
         >
           一幅正在晕染的画,请稍候…
         </motion.p>

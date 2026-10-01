@@ -1,39 +1,72 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
+  Check,
   ChevronLeft,
   ChevronRight,
   Crown,
   ImagePlus,
   Images,
+  ImageOff,
   Moon,
   Sparkles,
   Star,
   Sun,
+  Share2,
 } from 'lucide-react';
 import { castleContent } from '../../data/siteContent';
 import castleWatercolor from '../../assets/castle-watercolor.png';
+import { getSwipeDirection } from '../../galleryNavigation';
+import useCopyFeedback from '../../useCopyFeedback';
 
-function DisneyCastle({ onArchiveChange }) {
+function DisneyCastle({ onArchiveChange, archivePostId, archiveImageIndex = 0, onOpenArchive, onCloseArchive, onArchiveImageChange }) {
   const [isNight, setIsNight] = useState(true);
-  const [selectedPost, setSelectedPost] = useState(null);
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [archiveHost, setArchiveHost] = useState(null);
+  const [imageError, setImageError] = useState(false);
+  const sectionRef = useRef(null);
+  const archiveRef = useRef(null);
   const archiveTriggerRef = useRef(null);
+  const swipeStartRef = useRef(null);
+  const thumbnailsRef = useRef(null);
   const shouldRestoreArchiveFocusRef = useRef(false);
+  const { copy, feedback } = useCopyFeedback();
+  const publishedPosts = castleContent.posts.filter((post) => !post.draft);
+  const selectedPost = publishedPosts.find((post) => post.id === archivePostId) || null;
+  const selectedImageIndex = archiveImageIndex;
   const selectedGallery = selectedPost?.gallery || [];
   const selectedImage = selectedGallery[selectedImageIndex];
 
-  const openArchive = (post) => {
-    setSelectedPost(post);
-    setSelectedImageIndex(0);
+  const openArchive = (post, trigger) => {
+    archiveTriggerRef.current = trigger;
+    onOpenArchive(post.id);
   };
 
   const closeArchive = useCallback(() => {
     shouldRestoreArchiveFocusRef.current = true;
-    setSelectedPost(null);
-    setSelectedImageIndex(0);
+    onCloseArchive();
+  }, [onCloseArchive]);
+
+  const showPreviousImage = useCallback(() => {
+    onArchiveImageChange((selectedImageIndex - 1 + selectedGallery.length) % selectedGallery.length);
+  }, [onArchiveImageChange, selectedGallery.length, selectedImageIndex]);
+
+  const showNextImage = useCallback(() => {
+    onArchiveImageChange((selectedImageIndex + 1) % selectedGallery.length);
+  }, [onArchiveImageChange, selectedGallery.length, selectedImageIndex]);
+
+  useEffect(() => {
+    setArchiveHost(sectionRef.current?.parentElement);
   }, []);
+
+  useEffect(() => {
+    setImageError(false);
+    if (!selectedGallery.length) return;
+    const nextImage = new Image();
+    nextImage.src = selectedGallery[(selectedImageIndex + 1) % selectedGallery.length].src;
+    thumbnailsRef.current?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [selectedGallery, selectedImageIndex]);
 
   useEffect(() => {
     onArchiveChange?.(Boolean(selectedPost));
@@ -53,37 +86,34 @@ function DisneyCastle({ onArchiveChange }) {
     if (!selectedPost) return undefined;
 
     const focusTimer = window.requestAnimationFrame(() => {
-      document.querySelector('[data-archive-return]')?.focus();
+      archiveRef.current?.querySelector('[data-archive-return]')?.focus();
     });
+    return () => window.cancelAnimationFrame(focusTimer);
+  }, [archiveHost, selectedPost]);
+
+  useEffect(() => {
+    if (!selectedPost) return undefined;
     const handleKeyDown = (event) => {
-      if (event.key !== 'Escape') return;
+      if (event.altKey || event.ctrlKey || event.metaKey || event.target.closest('input, textarea, select')) return;
+      if (!['Escape', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
       event.preventDefault();
       event.stopPropagation();
-      closeArchive();
+      if (event.key === 'Escape') closeArchive();
+      else if (event.key === 'ArrowLeft') showPreviousImage();
+      else showNextImage();
     };
 
     document.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      window.cancelAnimationFrame(focusTimer);
       document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [closeArchive, selectedPost]);
-
-  const showPreviousImage = () => {
-    setSelectedImageIndex((index) => (
-      (index - 1 + selectedGallery.length) % selectedGallery.length
-    ));
-  };
-
-  const showNextImage = () => {
-    setSelectedImageIndex((index) => ((index + 1) % selectedGallery.length));
-  };
+  }, [closeArchive, selectedPost, showNextImage, showPreviousImage]);
 
   return (
-    <section className={`disney-castle relative h-full w-full overflow-hidden p-8 text-sienna ${isNight ? 'is-night' : 'is-day'}`}>
+    <section ref={sectionRef} className={`disney-castle relative h-full w-full overflow-hidden p-8 text-sienna ${isNight ? 'is-night' : 'is-day'}`}>
       <div className="castle-sky absolute inset-0" aria-hidden="true" />
 
-      <div className="castle-main-layout relative z-10 grid h-full min-h-0 grid-cols-[0.92fr_1.08fr] gap-9 pr-14">
+      <div inert={Boolean(selectedPost)} className="castle-main-layout relative z-10 grid h-full min-h-0 grid-cols-[0.92fr_1.08fr] gap-9 pr-14">
         <div className="castle-stage relative flex min-h-0 flex-col overflow-hidden rounded-[7px] p-6">
           <div className="castle-stars absolute inset-0" aria-hidden="true">
             {[...Array(11)].map((_, index) => (
@@ -149,7 +179,7 @@ function DisneyCastle({ onArchiveChange }) {
           <p className="castle-journal-introduction relative z-10 mt-4 max-w-md text-sm leading-6 text-[#594838]">{castleContent.introduction}</p>
 
           <div className="castle-post-feed relative z-10 mt-5 grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto pr-1">
-            {castleContent.posts.map((post, index) => {
+            {publishedPosts.map((post, index) => {
               const postImage = post.image === 'castle' ? castleWatercolor : post.image;
               const PostElement = post.gallery ? motion.button : motion.article;
 
@@ -157,13 +187,12 @@ function DisneyCastle({ onArchiveChange }) {
                 <PostElement
                   className={`castle-post ${post.draft ? 'is-draft' : ''} ${post.featured ? 'is-featured' : ''} ${post.gallery ? 'is-openable' : ''}`}
                   key={post.id}
-                  ref={post.gallery ? archiveTriggerRef : undefined}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.12 + index * 0.08, duration: 0.35 }}
                   {...(post.gallery ? {
                     type: 'button',
-                    onClick: () => openArchive(post),
+                    onClick: (event) => openArchive(post, event.currentTarget),
                     'aria-label': `打开档案：${post.title}`,
                   } : {})}
                 >
@@ -194,7 +223,7 @@ function DisneyCastle({ onArchiveChange }) {
         </article>
       </div>
 
-      <AnimatePresence>
+      {archiveHost && createPortal(<AnimatePresence>
         {selectedPost && selectedImage && (
           <motion.div
             className="castle-archive-backdrop absolute inset-0 z-30"
@@ -206,6 +235,7 @@ function DisneyCastle({ onArchiveChange }) {
             }}
           >
             <motion.section
+              ref={archiveRef}
               className="castle-archive-panel absolute z-40 flex min-h-0 flex-col overflow-hidden"
               data-modal-focus-scope
               aria-label={`${selectedPost.title}档案`}
@@ -219,24 +249,66 @@ function DisneyCastle({ onArchiveChange }) {
                   <ArrowLeft aria-hidden="true" size={17} strokeWidth={1.7} />
                   <span>返回小记</span>
                 </button>
-                <span className="castle-archive-count">
+                <div className="archive-header-actions">
+                <span className="castle-archive-count" aria-live="polite" aria-atomic="true">
                   {String(selectedImageIndex + 1).padStart(2, '0')} / {String(selectedGallery.length).padStart(2, '0')}
                 </span>
+                <button
+                  className="archive-share-button"
+                  type="button"
+                  aria-label="复制相册链接"
+                  title={feedback.id === 'archive' ? '链接已复制' : '复制相册链接'}
+                  onClick={() => copy('archive', window.location.href, '相册链接')}
+                >
+                  {feedback.id === 'archive' ? <Check aria-hidden="true" size={17} /> : <Share2 aria-hidden="true" size={17} />}
+                </button>
+                </div>
               </header>
+              <p className="sr-only" role="status">{feedback.message}</p>
 
               <div className="castle-archive-layout grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_248px] gap-5">
-                <figure className="castle-archive-viewer relative min-h-0 overflow-hidden">
+                <figure
+                  className="castle-archive-viewer relative min-h-0 overflow-hidden"
+                  onPointerDown={(event) => {
+                    if (!event.isPrimary || event.target.closest('button')) {
+                      swipeStartRef.current = null;
+                      return;
+                    }
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    swipeStartRef.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+                  }}
+                  onPointerCancel={() => { swipeStartRef.current = null; }}
+                  onPointerUp={(event) => {
+                    const start = swipeStartRef.current;
+                    swipeStartRef.current = null;
+                    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                    if (!start || start.pointerId !== event.pointerId) return;
+                    const direction = getSwipeDirection(start, { x: event.clientX, y: event.clientY });
+                    if (direction > 0) showNextImage();
+                    else if (direction < 0) showPreviousImage();
+                  }}
+                >
+                  {imageError ? (
+                    <div className="archive-image-error" role="status">
+                      <ImageOff aria-hidden="true" size={28} />
+                      <p>照片暂时无法加载</p>
+                      <button type="button" onClick={() => setImageError(false)}>重试</button>
+                    </div>
+                  ) : (
                   <AnimatePresence mode="wait">
                     <motion.img
                       key={selectedImage.src}
                       src={selectedImage.src}
                       alt={selectedImage.alt}
+                      draggable="false"
+                      onError={() => setImageError(true)}
                       initial={{ opacity: 0, scale: 1.018 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0 }}
                       transition={{ duration: 0.28, ease: 'easeOut' }}
                     />
                   </AnimatePresence>
+                  )}
 
                   <button
                     className="castle-gallery-arrow is-previous"
@@ -267,7 +339,7 @@ function DisneyCastle({ onArchiveChange }) {
                     <p>{selectedPost.summary}</p>
                   </div>
 
-                  <div className="castle-archive-thumbnails mt-4 grid min-h-0 flex-1 grid-cols-2 content-start gap-2 overflow-y-auto pr-1">
+                  <div ref={thumbnailsRef} className="castle-archive-thumbnails mt-4 grid min-h-0 flex-1 grid-cols-2 content-start gap-2 overflow-y-auto pr-1">
                     {selectedGallery.map((image, index) => (
                       <button
                         className={index === selectedImageIndex ? 'is-active' : ''}
@@ -275,7 +347,7 @@ function DisneyCastle({ onArchiveChange }) {
                         aria-label={`查看第 ${index + 1} 张：${image.caption}`}
                         aria-pressed={index === selectedImageIndex}
                         key={image.src}
-                        onClick={() => setSelectedImageIndex(index)}
+                        onClick={() => onArchiveImageChange(index)}
                       >
                         <img src={image.src} alt="" loading="lazy" />
                         <span>{String(index + 1).padStart(2, '0')}</span>
@@ -287,7 +359,7 @@ function DisneyCastle({ onArchiveChange }) {
             </motion.section>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>, archiveHost)}
     </section>
   );
 }

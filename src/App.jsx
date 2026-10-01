@@ -4,6 +4,8 @@ import { X } from 'lucide-react';
 import LoadingScreen from './components/LoadingScreen';
 import MainCanvas from './components/MainCanvas';
 import { musicList } from './data/siteContent';
+import useGalleryRoute from './useGalleryRoute';
+import { readStorage, writeStorage } from './storage';
 
 const modules = {
   vinyl: lazy(() => import('./components/VinylPlayer')),
@@ -207,7 +209,9 @@ function useVinylAudio() {
 }
 
 function App() {
-  const [activeModule, setActiveModule] = useState(null);
+  const { route, navigate, returnTo } = useGalleryRoute();
+  const activeModule = route.moduleId;
+  const [isReturning] = useState(() => readStorage('localStorage', 'silas-gallery-entered') === 'true');
   const [isLoading, setIsLoading] = useState(true);
   const [isSceneReady, setIsSceneReady] = useState(false);
   const [hasNestedOverlay, setHasNestedOverlay] = useState(false);
@@ -219,21 +223,30 @@ function App() {
   const isVinylOpen = activeModule === 'vinyl';
   const isContactOpen = activeModule === 'contact';
   const isCastleOpen = activeModule === 'castle';
+  const isAboutOpen = activeModule === 'about';
 
   const openModule = useCallback((moduleId) => {
     lastFocusedElementRef.current = document.activeElement;
-    setActiveModule(moduleId);
-  }, []);
+    navigate({ moduleId });
+  }, [navigate]);
 
   const closeModule = useCallback(() => {
-    setActiveModule(null);
+    returnTo({ moduleId: null });
     setHasNestedOverlay(false);
-    window.requestAnimationFrame(() => {
-      if (isKeyboardInteractionRef.current) {
-        lastFocusedElementRef.current?.focus?.({ preventScroll: true });
-      }
+  }, [returnTo]);
+
+  useEffect(() => {
+    if (activeModule || !lastFocusedElementRef.current) return undefined;
+    const focusTimer = window.setTimeout(() => {
+      if (isKeyboardInteractionRef.current) lastFocusedElementRef.current?.focus?.({ preventScroll: true });
       lastFocusedElementRef.current = null;
-    });
+    }, 450);
+    return () => window.clearTimeout(focusTimer);
+  }, [activeModule]);
+
+  const finishLoading = useCallback(() => {
+    writeStorage('localStorage', 'silas-gallery-entered', 'true');
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -253,7 +266,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!ActiveModule) return undefined;
+    if (!ActiveModule || isLoading) return undefined;
 
     const focusModal = () => {
       const focusScope = modalRef.current?.querySelector('[data-modal-focus-scope]') || modalRef.current;
@@ -296,23 +309,30 @@ function App() {
     };
 
     const focusTimer = window.requestAnimationFrame(focusModal);
+    const contentObserver = new MutationObserver(() => {
+      if (!modalRef.current?.contains(document.activeElement)) focusModal();
+    });
+    if (modalRef.current) contentObserver.observe(modalRef.current, { childList: true, subtree: true });
     document.addEventListener('keydown', handleKeyDown);
 
     return () => {
       window.cancelAnimationFrame(focusTimer);
+      contentObserver.disconnect();
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [ActiveModule, closeModule, hasNestedOverlay]);
+  }, [ActiveModule, closeModule, hasNestedOverlay, isLoading]);
 
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-cream font-body text-sienna">
+    <main className="gallery-app relative h-screen w-screen overflow-hidden bg-cream font-body text-sienna">
       <MainCanvas
         activeModule={activeModule}
+        isInactive={isLoading || Boolean(activeModule)}
         isMusicPlaying={vinylPlayer.isPlaying}
+        player={vinylPlayer}
         onOpenModule={openModule}
         onSceneReady={() => setIsSceneReady(true)}
       />
-      {isLoading && <LoadingScreen isSceneReady={isSceneReady} onDone={() => setIsLoading(false)} />}
+      {isLoading && <LoadingScreen compact={isReturning} isSceneReady={isSceneReady} onDone={finishLoading} />}
 
       <AnimatePresence>
         {ActiveModule && (
@@ -338,6 +358,8 @@ function App() {
                     ? 'contact-dialog-panel rounded-[8px]'
                     : isCastleOpen
                       ? 'castle-dialog-panel rounded-[8px]'
+                    : isAboutOpen
+                      ? 'about-dialog-panel rounded-[8px]'
                     : 'h-[72vh] w-[72vw] max-w-5xl rounded-[8px]',
               ].join(' ')}
               initial={{ y: 24, scale: 0.96, opacity: 0, filter: 'blur(14px)' }}
@@ -350,6 +372,11 @@ function App() {
                   onArchiveChange={setHasNestedOverlay}
                   onClose={closeModule}
                   player={vinylPlayer}
+                  archivePostId={route.postId}
+                  archiveImageIndex={route.imageIndex || 0}
+                  onOpenArchive={(postId) => navigate({ moduleId: 'castle', postId, imageIndex: 0 })}
+                  onCloseArchive={() => returnTo({ moduleId: 'castle' })}
+                  onArchiveImageChange={(imageIndex) => navigate({ ...route, imageIndex }, true)}
                 />
               </Suspense>
               {!isVinylOpen && (

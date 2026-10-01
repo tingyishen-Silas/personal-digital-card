@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
 import {
   Castle,
+  ChevronLeft,
+  ChevronRight,
   Coffee,
   Disc3,
   Mail,
@@ -10,6 +12,8 @@ import {
   UserRound,
 } from 'lucide-react';
 import { assetPath } from '../../assetPath';
+import { readStorage, writeStorage } from '../../storage';
+import MiniPlayer from '../MiniPlayer';
 
 const SCENE_SOURCES = [assetPath('/scene-optimized.jpg')];
 const SCRATCH_THRESHOLD = 0.6;
@@ -23,11 +27,11 @@ const hotspots = [
   { id: 'castle', label: '一些记忆', target: '城堡', icon: Castle, bounds: { x1: 56, x2: 78, y1: 1, y2: 22 } },
 ];
 
-function getCoverGeometry(containerWidth, containerHeight, imageWidth, imageHeight) {
+function getCoverGeometry(containerWidth, containerHeight, imageWidth, imageHeight, position = 0.5) {
   const scale = Math.max(containerWidth / imageWidth, containerHeight / imageHeight);
   const renderWidth = imageWidth * scale;
   const renderHeight = imageHeight * scale;
-  const offsetX = (containerWidth - renderWidth) / 2;
+  const offsetX = (containerWidth - renderWidth) * position;
   const offsetY = (containerHeight - renderHeight) / 2;
 
   return {
@@ -39,17 +43,22 @@ function getCoverGeometry(containerWidth, containerHeight, imageWidth, imageHeig
   };
 }
 
-function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onSceneReady }) {
+function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, onOpenModule, onSceneReady }) {
   const shellRef = useRef(null);
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef(null);
-  const hasVisitedRef = useRef(window.sessionStorage.getItem('silas-gallery-visited') === 'true');
+  const hasVisitedRef = useRef(
+    readStorage('sessionStorage', 'silas-gallery-visited') === 'true'
+    || readStorage('localStorage', 'silas-gallery-colored') === 'true',
+  );
   const hasCompletedRef = useRef(hasVisitedRef.current);
   const progressCheckRef = useRef(0);
   const scratchPointsRef = useRef([]);
   const hasReportedSceneReadyRef = useRef(false);
+  const coverRef = useRef(null);
+  const scenePositionRef = useRef(0);
 
   const [sceneSrcIndex, setSceneSrcIndex] = useState(0);
   const [imageMeta, setImageMeta] = useState(null);
@@ -61,6 +70,8 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
   const [hoveredModule, setHoveredModule] = useState(null);
   const [hintedModule, setHintedModule] = useState(null);
   const [visitedModules, setVisitedModules] = useState(() => new Set());
+  const [scenePosition, setScenePosition] = useState(0);
+  const [canPanScene, setCanPanScene] = useState(false);
 
   const sceneSrc = SCENE_SOURCES[sceneSrcIndex];
   const debugMode = useMemo(() => new URLSearchParams(window.location.search).get('debug') === '1', []);
@@ -79,7 +90,7 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
 
     const width = shell.clientWidth;
     const height = shell.clientHeight;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     canvas.style.width = `${width}px`;
@@ -88,37 +99,42 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
     const context = canvas.getContext('2d', { willReadFrequently: true });
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const cover = getCoverGeometry(width, height, image.naturalWidth, image.naturalHeight);
+    const isNarrow = width <= 600;
+    const position = isNarrow ? scenePositionRef.current : 0.5;
+    const cover = getCoverGeometry(width, height, image.naturalWidth, image.naturalHeight, position);
+    coverRef.current = cover;
+    setCanPanScene(isNarrow && cover.renderWidth > width + 1);
+    image.style.objectPosition = `${position * 100}% 50%`;
     context.clearRect(0, 0, width, height);
-    context.drawImage(image, cover.offsetX, cover.offsetY, cover.renderWidth, cover.renderHeight);
+    if (!hasCompletedRef.current) {
+      context.drawImage(image, cover.offsetX, cover.offsetY, cover.renderWidth, cover.renderHeight);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+      const data = pixels.data;
 
-    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-    const data = pixels.data;
-
-    for (let index = 0; index < data.length; index += 4) {
-      const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
-      const contrasted = (gray - 128) * 1.2 + 128;
-      const brightened = contrasted * 1.1 + 10;
-      const noise = (Math.random() - 0.5) * 18;
-      const value = Math.max(0, Math.min(255, brightened + noise));
-      data[index] = value;
-      data[index + 1] = value;
-      data[index + 2] = value;
-      data[index + 3] = 255;
+      for (let index = 0; index < data.length; index += 4) {
+        const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+        const contrasted = (gray - 128) * 1.2 + 128;
+        const brightened = contrasted * 1.1 + 10;
+        const noise = (Math.random() - 0.5) * 18;
+        const value = Math.max(0, Math.min(255, brightened + noise));
+        data[index] = value;
+        data[index + 1] = value;
+        data[index + 2] = value;
+        data[index + 3] = 255;
+      }
+      context.putImageData(pixels, 0, 0);
     }
-
-    context.putImageData(pixels, 0, 0);
 
     if (!hasCompletedRef.current && scratchPointsRef.current.length > 0) {
       context.save();
       context.globalCompositeOperation = 'destination-out';
       scratchPointsRef.current.forEach((point) => {
         const gradient = context.createRadialGradient(
-          point.x * width,
-          point.y * height,
+          cover.offsetX + point.x * cover.renderWidth,
+          cover.offsetY + point.y * cover.renderHeight,
           BRUSH_SIZE * 0.1,
-          point.x * width,
-          point.y * height,
+          cover.offsetX + point.x * cover.renderWidth,
+          cover.offsetY + point.y * cover.renderHeight,
           BRUSH_SIZE * 0.58,
         );
         gradient.addColorStop(0, 'rgba(0,0,0,0.98)');
@@ -126,7 +142,7 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
         gradient.addColorStop(1, 'rgba(0,0,0,0)');
         context.fillStyle = gradient;
         context.beginPath();
-        context.arc(point.x * width, point.y * height, BRUSH_SIZE * 0.58, 0, Math.PI * 2);
+        context.arc(cover.offsetX + point.x * cover.renderWidth, cover.offsetY + point.y * cover.renderHeight, BRUSH_SIZE * 0.58, 0, Math.PI * 2);
         context.fill();
       });
       context.restore();
@@ -158,7 +174,8 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
     if (!canvas || !shell) return;
 
     hasCompletedRef.current = true;
-    window.sessionStorage.setItem('silas-gallery-visited', 'true');
+    writeStorage('sessionStorage', 'silas-gallery-visited', 'true');
+    writeStorage('localStorage', 'silas-gallery-colored', 'true');
     isDrawingRef.current = false;
     setIsComplete(true);
 
@@ -203,12 +220,20 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
   const resetColoring = useCallback(() => {
     hasCompletedRef.current = false;
     scratchPointsRef.current = [];
-    window.sessionStorage.removeItem('silas-gallery-visited');
+    writeStorage('sessionStorage', 'silas-gallery-visited', null);
+    writeStorage('localStorage', 'silas-gallery-colored', null);
     setHasScratched(false);
     setIsComplete(false);
     setIsExploreReady(false);
     window.requestAnimationFrame(resizeCanvas);
   }, [resizeCanvas]);
+
+  const panScene = (direction) => {
+    const nextPosition = Math.max(0, Math.min(1, scenePositionRef.current + direction * 0.5));
+    scenePositionRef.current = nextPosition;
+    setScenePosition(nextPosition);
+    window.requestAnimationFrame(resizeCanvas);
+  };
 
   const openModule = useCallback((moduleId) => {
     setHintedModule(null);
@@ -251,6 +276,14 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
   const stampBrush = useCallback((x, y) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    const cover = coverRef.current;
+    if (cover && scratchPointsRef.current.length < 4000) {
+      scratchPointsRef.current.push({
+        x: (x - cover.offsetX) / cover.renderWidth,
+        y: (y - cover.offsetY) / cover.renderHeight,
+      });
+    }
 
     const context = canvas.getContext('2d');
     const size = BRUSH_SIZE * (0.84 + Math.random() * 0.24);
@@ -308,7 +341,6 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
     const point = getLocalPoint(event);
     isDrawingRef.current = true;
     lastPointRef.current = point;
-    scratchPointsRef.current = [{ x: point.x / event.currentTarget.clientWidth, y: point.y / event.currentTarget.clientHeight }];
     setHasScratched(true);
     stampBrush(point.x, point.y);
     checkProgress();
@@ -319,12 +351,6 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
     const point = getLocalPoint(event);
     scratchBetween(lastPointRef.current || point, point);
     lastPointRef.current = point;
-    if (scratchPointsRef.current.length < 360) {
-      scratchPointsRef.current.push({
-        x: point.x / event.currentTarget.clientWidth,
-        y: point.y / event.currentTarget.clientHeight,
-      });
-    }
     checkProgress();
   }, [activeModule, checkProgress, getLocalPoint, isComplete, scratchBetween]);
 
@@ -423,7 +449,7 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
   const vinylHotspot = hotspotRects.find((hotspot) => hotspot.id === 'vinyl');
 
   return (
-    <section ref={shellRef} className="relative h-screen w-screen overflow-hidden bg-cream" style={{ cursor }}>
+    <section ref={shellRef} inert={isInactive} className="gallery-scene relative h-screen w-screen overflow-hidden bg-cream" style={{ cursor }}>
       <img
         ref={imageRef}
         className="absolute inset-0 h-full w-full object-cover"
@@ -440,6 +466,8 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
         }}
         onError={handleImageError}
       />
+
+      {sceneUnavailable && <p className="scene-error" role="status">画面暂时没能展开</p>}
 
       <canvas
         ref={canvasRef}
@@ -469,12 +497,12 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
           ].join(' ')}
         >
           <Paintbrush aria-hidden="true" size={18} strokeWidth={1.7} />
-          <span>按住鼠标，为这幅画上色；也可直接从底部进入</span>
+          <span>为这幅画，添一点颜色</span>
         </div>
       )}
 
       {(isExploreReady || debugMode) && imageMeta && (
-        <div className="absolute inset-0 z-20">
+        <div className="pointer-events-none absolute inset-0 z-20">
           {hotspotRects.map(({ id, label, target, rect }, index) => (
             <button
               className={[
@@ -486,12 +514,15 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
               type="button"
               key={id}
               aria-label={label}
+              aria-hidden="true"
+              tabIndex={-1}
               style={{
                 left: `${rect.left}px`,
                 top: `${rect.top}px`,
                 width: `${rect.width}px`,
                 height: `${rect.height}px`,
                 '--hotspot-delay': `${index * 0.18}s`,
+                pointerEvents: isExploreReady ? 'auto' : 'none',
               }}
               onClick={() => openModule(id)}
               onMouseEnter={() => {
@@ -513,14 +544,14 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
         </div>
       )}
 
-      {(imageMeta || sceneUnavailable) && (
+      {(
         <div className="gallery-identity pointer-events-none absolute left-8 top-7 z-[25]">
           <span className="gallery-identity-title block font-title italic">Silas’s Gallery</span>
           <span className="gallery-identity-subtitle block">Personal digital card</span>
         </div>
       )}
 
-      {(imageMeta || sceneUnavailable) && (
+      {(
         <div className="gallery-index-anchor pointer-events-none absolute inset-x-0 bottom-6 z-[25] flex justify-center">
           <nav className="gallery-index pointer-events-auto flex" aria-label="画廊入口">
             {hotspots.map(({ id, label, icon: Icon }) => (
@@ -549,6 +580,19 @@ function MainCanvas({ activeModule, isMusicPlaying = false, onOpenModule, onScen
           </nav>
         </div>
       )}
+
+      {canPanScene && !activeModule && (
+        <div className="scene-pan-controls">
+          <button type="button" aria-label="向左看看" title="向左看看" disabled={scenePosition === 0} onClick={() => panScene(-1)}>
+            <ChevronLeft aria-hidden="true" size={22} />
+          </button>
+          <button type="button" aria-label="向右看看" title="向右看看" disabled={scenePosition === 1} onClick={() => panScene(1)}>
+            <ChevronRight aria-hidden="true" size={22} />
+          </button>
+        </div>
+      )}
+
+      {!activeModule && <MiniPlayer player={player} onOpen={() => openModule('vinyl')} />}
 
       {isExploreReady && isMusicPlaying && vinylHotspot && (
         <div
