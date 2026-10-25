@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
 import {
   Castle,
@@ -7,8 +7,10 @@ import {
   Coffee,
   Disc3,
   Mail,
+  Image as ImageIcon,
   Paintbrush,
   Palette,
+  Rotate3d,
   UserRound,
 } from 'lucide-react';
 import { assetPath } from '../../assetPath';
@@ -21,9 +23,23 @@ import {
   isHorizontalDrag,
   isScenePannable,
 } from '../../scenePan';
+import { DIORAMA_START, clampOrbit, getOrbitFromDrag } from '../../diorama';
 import { FOCUS_DEPTH } from '../../livingPainting';
 import LivingPainting from '../LivingPainting';
 import MiniPlayer from '../MiniPlayer';
+
+// three.js and the layer images only load when someone opens the diorama.
+const DioramaView = lazy(() => import('../DioramaView'));
+
+function supportsWebGL2() {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return Boolean(gl);
+  } catch {
+    return false;
+  }
+}
 
 const SCENE_SOURCES = [assetPath('/scene-optimized.jpg')];
 const SCRATCH_THRESHOLD = 0.6;
@@ -75,6 +91,8 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
   const panFrameRef = useRef(0);
   const suppressClickRef = useRef(false);
   const hotspotLayerRef = useRef(null);
+  const orbitRef = useRef({ ...DIORAMA_START });
+  const dioramaWakeRef = useRef(null);
 
   const [sceneSrcIndex, setSceneSrcIndex] = useState(0);
   const [imageMeta, setImageMeta] = useState(null);
@@ -90,6 +108,12 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
   const [scenePosition, setScenePosition] = useState(0.5);
   const [canPanScene, setCanPanScene] = useState(false);
   const [hotspotDepths, setHotspotDepths] = useState({});
+  const [isDioramaMounted, setIsDioramaMounted] = useState(false);
+  const [isDioramaOpen, setIsDioramaOpen] = useState(false);
+  const [isDioramaReady, setIsDioramaReady] = useState(false);
+  const [canShowDiorama] = useState(supportsWebGL2);
+  const [isDioramaHinted, setIsDioramaHinted] = useState(false);
+  const [showOrbitCaption, setShowOrbitCaption] = useState(false);
 
   const sceneSrc = SCENE_SOURCES[sceneSrcIndex];
   const debugMode = useMemo(() => new URLSearchParams(window.location.search).get('debug') === '1', []);
@@ -132,6 +156,7 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
       const centre = rect.left + rect.width / 2;
       return { ...hotspot, rect, isCentreOnScreen: centre > 72 && centre < width - 72 };
     }));
+    dioramaWakeRef.current?.();
 
     return { cover, width, height };
   }, []);
@@ -143,19 +168,56 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
   }, []);
 
   // How far in front of / behind the still plane each object sits, so its hotspot moves with it.
-  // Averaged over the middle of each object so one background pixel cannot skew it.
+  // The 75th percentile of depth inside each object's box: the object itself, not the wall behind it.
   const handleDepthReady = useCallback((depthAt) => {
     setHotspotDepths(Object.fromEntries(hotspots.map(({ id, bounds }) => {
-      let total = 0;
-      for (let row = 0; row < 5; row += 1) {
-        for (let column = 0; column < 5; column += 1) {
-          const u = (bounds.x1 + (bounds.x2 - bounds.x1) * (0.2 + column * 0.15)) / 100;
-          const v = (bounds.y1 + (bounds.y2 - bounds.y1) * (0.2 + row * 0.15)) / 100;
-          total += depthAt(u, v);
+      const samples = [];
+      for (let row = 0; row < 7; row += 1) {
+        for (let column = 0; column < 7; column += 1) {
+          const u = (bounds.x1 + (bounds.x2 - bounds.x1) * (0.1 + column * (0.8 / 6))) / 100;
+          const v = (bounds.y1 + (bounds.y2 - bounds.y1) * (0.1 + row * (0.8 / 6))) / 100;
+          samples.push(depthAt(u, v));
         }
       }
-      return [id, total / 25 - FOCUS_DEPTH];
+      samples.sort((a, b) => a - b);
+      return [id, samples[Math.floor(samples.length * 0.75)] - FOCUS_DEPTH];
     })));
+  }, []);
+
+  const openDiorama = () => {
+    orbitRef.current = { ...DIORAMA_START };
+    setIsRevealingLabels(false);
+    setIsDioramaMounted(true);
+    setIsDioramaOpen(true);
+  };
+  const closeDiorama = useCallback(() => setIsDioramaOpen(false), []);
+  const handleDioramaReady = useCallback(() => setIsDioramaReady(true), []);
+  const handleDioramaClosed = useCallback(() => {
+    setIsDioramaMounted(false);
+    setIsDioramaReady(false);
+  }, []);
+  const handleDioramaError = useCallback(() => {
+    setIsDioramaOpen(false);
+    setIsDioramaMounted(false);
+    setIsDioramaReady(false);
+  }, []);
+  const dioramaHotspots = useMemo(() => hotspots.map(({ id, bounds }) => ({
+    id,
+    bounds,
+    depth: (hotspotDepths[id] ?? 0) + FOCUS_DEPTH,
+  })), [hotspotDepths]);
+  // Written straight to the DOM every rendered frame; React state would re-render the scene at 60 fps.
+  const projectHotspots = useCallback((rects) => {
+    const layer = hotspotLayerRef.current;
+    if (!layer) return;
+    Object.entries(rects).forEach(([id, rect]) => {
+      const button = layer.querySelector(`[data-hotspot-id="${id}"]`);
+      if (!button) return;
+      button.style.setProperty('--dio-left', `${rect.left}px`);
+      button.style.setProperty('--dio-top', `${rect.top}px`);
+      button.style.setProperty('--dio-width', `${rect.width}px`);
+      button.style.setProperty('--dio-height', `${rect.height}px`);
+    });
   }, []);
 
   const resizeCanvas = useCallback(() => {
@@ -284,6 +346,9 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
     setIsComplete(false);
     setIsExploreReady(false);
     setIsRevealingLabels(false);
+    setIsDioramaOpen(false);
+    setIsDioramaMounted(false);
+    setIsDioramaReady(false);
     panTweenRef.current?.kill();
     window.requestAnimationFrame(resizeCanvas);
   }, [resizeCanvas]);
@@ -313,9 +378,16 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
   };
 
   // After colouring, a horizontal drag on the painting pans it (phones and portrait tablets).
+  const isOrbiting = isDioramaMounted && isDioramaOpen;
+
   const handleScenePointerDown = (event) => {
-    if (!canPanScene || !hasCompletedRef.current || activeModule || !event.isPrimary) return;
+    if (!hasCompletedRef.current || activeModule || !event.isPrimary) return;
     if (event.target !== canvasRef.current && !event.target.closest('.main-canvas-hotspot')) return;
+    if (isOrbiting) {
+      panDragRef.current = { mode: 'orbit', pointerId: event.pointerId, x: event.clientX, y: event.clientY, orbit: { ...orbitRef.current }, isDragging: false };
+      return;
+    }
+    if (!canPanScene) return;
     panTweenRef.current?.kill();
     panDragRef.current = {
       pointerId: event.pointerId,
@@ -330,6 +402,18 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
     const drag = panDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     const deltaX = event.clientX - drag.x;
+    if (drag.mode === 'orbit') {
+      const deltaY = event.clientY - drag.y;
+      if (!drag.isDragging) {
+        if (Math.hypot(deltaX, deltaY) < 8) return;
+        drag.isDragging = true;
+        shellRef.current?.setPointerCapture?.(event.pointerId);
+      }
+      const shell = shellRef.current;
+      orbitRef.current = getOrbitFromDrag(drag.orbit, deltaX, deltaY, { width: shell.clientWidth, height: shell.clientHeight });
+      dioramaWakeRef.current?.();
+      return;
+    }
     if (!drag.isDragging) {
       if (!isHorizontalDrag(deltaX, event.clientY - drag.y)) return;
       drag.isDragging = true;
@@ -515,6 +599,45 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
     window.cancelAnimationFrame(panFrameRef.current);
   }, []);
 
+  // Point out the new view for a moment once the painting is coloured.
+  useEffect(() => {
+    if (!isExploreReady || !canShowDiorama) return undefined;
+    setIsDioramaHinted(true);
+    const hintTimer = window.setTimeout(() => setIsDioramaHinted(false), 6000);
+    return () => window.clearTimeout(hintTimer);
+  }, [canShowDiorama, isExploreReady]);
+
+  useEffect(() => {
+    if (!isDioramaReady || !isDioramaOpen) {
+      setShowOrbitCaption(false);
+      return undefined;
+    }
+    setShowOrbitCaption(true);
+    const captionTimer = window.setTimeout(() => setShowOrbitCaption(false), 4500);
+    return () => window.clearTimeout(captionTimer);
+  }, [isDioramaOpen, isDioramaReady]);
+
+  // Arrow keys turn the diorama; Esc returns to the painting.
+  useEffect(() => {
+    if (!isDioramaOpen || activeModule) return undefined;
+    const steps = { ArrowLeft: [6, 0], ArrowRight: [-6, 0], ArrowUp: [0, 3], ArrowDown: [0, -3] };
+    const handleKeyDown = (event) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.target.closest?.('input, textarea, select')) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeDiorama();
+        return;
+      }
+      const step = steps[event.key];
+      if (!step) return;
+      event.preventDefault();
+      orbitRef.current = clampOrbit({ yaw: orbitRef.current.yaw + step[0], pitch: orbitRef.current.pitch + step[1] });
+      dioramaWakeRef.current?.();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [activeModule, closeDiorama, isDioramaOpen]);
+
   useEffect(() => {
     if (!isRevealingLabels) return undefined;
     const revealTimer = window.setTimeout(() => setIsRevealingLabels(false), REVEAL_LABELS_DURATION);
@@ -602,7 +725,7 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
     <section
       ref={shellRef}
       inert={isInactive}
-      className={`gallery-scene relative h-screen w-screen overflow-hidden bg-cream ${canPanScene && isComplete ? 'is-pannable' : ''}`}
+      className={`gallery-scene relative h-screen w-screen overflow-hidden bg-cream ${canPanScene && isComplete ? 'is-pannable' : ''} ${isOrbiting ? 'is-orbiting' : ''}`}
       style={{ cursor }}
       onPointerDown={handleScenePointerDown}
       onPointerMove={handleScenePointerMove}
@@ -634,13 +757,32 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
 
       <LivingPainting
         active={isExploreReady && Boolean(imageMeta) && !sceneUnavailable}
-        paused={isInactive}
+        paused={isInactive || isDioramaMounted}
         imageRef={imageRef}
         getLayout={getLayout}
         focusRect={hotspotRects.find(({ id }) => id === (hoveredModule || hintedModule))?.rect || null}
         hotspotLayerRef={hotspotLayerRef}
         onDepthReady={handleDepthReady}
       />
+
+      {isDioramaMounted && (
+        <Suspense fallback={null}>
+          <DioramaView
+            open={isDioramaOpen}
+            paused={isInactive}
+            imageRef={imageRef}
+            getLayout={getLayout}
+            orbitRef={orbitRef}
+            wakeRef={dioramaWakeRef}
+            hotspots={dioramaHotspots}
+            onProjectHotspots={projectHotspots}
+            onReady={handleDioramaReady}
+            onClosed={handleDioramaClosed}
+            onError={handleDioramaError}
+          />
+          <div className={`diorama-frame pointer-events-none absolute inset-0 z-[15] ${isDioramaOpen && isDioramaReady ? 'is-open' : ''}`} aria-hidden="true" />
+        </Suspense>
+      )}
 
       {sceneUnavailable && <p className="scene-error" role="status">画面暂时没能展开</p>}
 
@@ -664,6 +806,28 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
         <span className="paint-action-tooltip">{isComplete ? '重新上色' : '一键上色'}</span>
       </button>
 
+      {isComplete && canShowDiorama && (
+        <button
+          className={`diorama-toggle absolute z-20 ${isDioramaOpen ? 'is-active' : ''} ${isDioramaHinted && !isDioramaOpen ? 'is-labelled' : ''}`}
+          type="button"
+          aria-pressed={isDioramaOpen}
+          aria-label={isDioramaOpen ? '回到画面' : '转动看看'}
+          onClick={() => (isDioramaOpen ? closeDiorama() : openDiorama())}
+          onMouseEnter={() => setIsDioramaHinted(false)}
+        >
+          {isDioramaOpen
+            ? <ImageIcon aria-hidden="true" size={21} strokeWidth={1.7} />
+            : <Rotate3d aria-hidden="true" size={21} strokeWidth={1.7} />}
+          <span className="paint-action-tooltip">{isDioramaOpen ? '回到画面' : '转动看看'}</span>
+        </button>
+      )}
+
+      {showOrbitCaption && (
+        <p className="painting-hint diorama-caption pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 px-5 py-3 text-sm" role="status">
+          拖动画面，转一转<span className="diorama-caption-keys">，方向键也可以，Esc 回到画面</span>
+        </p>
+      )}
+
       {!isComplete && (
         <div
           className={[
@@ -677,7 +841,7 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
       )}
 
       {(isExploreReady || debugMode) && imageMeta && (
-        <div ref={hotspotLayerRef} className="pointer-events-none absolute inset-0 z-20">
+        <div ref={hotspotLayerRef} className={`pointer-events-none absolute inset-0 z-20 ${isDioramaMounted && isDioramaReady ? 'is-diorama' : ''}`}>
           {hotspotRects.map(({ id, label, target, rect, isCentreOnScreen }, index) => (
             <button
               className={[
@@ -689,6 +853,7 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
               ].join(' ')}
               type="button"
               key={id}
+              data-hotspot-id={id}
               aria-label={label}
               aria-hidden="true"
               tabIndex={-1}
@@ -771,7 +936,7 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
 
       {!activeModule && <MiniPlayer player={player} onOpen={() => openModule('vinyl')} />}
 
-      {isExploreReady && isMusicPlaying && vinylHotspot && (
+      {isExploreReady && isMusicPlaying && vinylHotspot && !isDioramaMounted && (
         <div
           className="pointer-events-none absolute z-20"
           style={{

@@ -1,3 +1,4 @@
+import { lazy, Suspense, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ChevronLeft,
@@ -9,6 +10,19 @@ import {
   Volume2,
 } from 'lucide-react';
 import { musicList } from '../../data/siteContent';
+
+// three.js loads with the record player only; without WebGL the drawn turntable stays.
+const GramophoneScene = lazy(() => import('../GramophoneScene'));
+
+function supportsWebGL2() {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return Boolean(gl);
+  } catch {
+    return false;
+  }
+}
 
 function VinylPlayer({ player }) {
   const {
@@ -31,6 +45,8 @@ function VinylPlayer({ player }) {
   } = player;
 
   const displayTrack = currentTrack || musicList[0];
+  const [canShow3d, setCanShow3d] = useState(supportsWebGL2);
+  const [is3dReady, setIs3dReady] = useState(false);
   const progressValue = duration > 0 ? currentTime : 0;
   const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const volumePercent = Math.round(volume * 100);
@@ -39,7 +55,19 @@ function VinylPlayer({ player }) {
     <section className="vinyl-frame relative h-full w-full overflow-hidden bg-cream p-7 text-sienna">
       <div className="relative z-10 grid h-full min-h-0 grid-cols-[1.08fr_0.92fr] gap-7">
         <div className="flex min-h-0 flex-col">
-          <div className="turntable-stage relative flex min-h-0 flex-1 items-center justify-center rounded-[8px] p-6">
+          <div className={`turntable-stage relative flex min-h-0 flex-1 items-center justify-center rounded-[8px] p-6 ${is3dReady ? 'has-3d' : ''}`}>
+            {canShow3d && (
+              <Suspense fallback={null}>
+                <GramophoneScene
+                  player={{ ...player, fallbackTrack: musicList[0] }}
+                  onReady={() => setIs3dReady(true)}
+                  onError={() => {
+                    setCanShow3d(false);
+                    setIs3dReady(false);
+                  }}
+                />
+              </Suspense>
+            )}
             <div className="turntable-base absolute bottom-6 h-16 w-[82%] rounded-[18px] bg-[linear-gradient(135deg,#8B7355,#A0522D_46%,#6c3e25)] shadow-[0_24px_42px_rgba(65,37,21,0.25)]" />
             <div className="turntable-glow absolute bottom-16 h-7 w-[72%] rounded-full bg-[#E8D5B7]/30 blur-xl" />
 
