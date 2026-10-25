@@ -14,18 +14,24 @@ export default function useCopyFeedback() {
     };
   }, []);
 
+  const show = (nextFeedback, duration = 3000) => {
+    setFeedback(nextFeedback);
+    window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setFeedback({ id: null, message: '' }), duration);
+  };
+
   const copy = async (id, value, label) => {
     try {
       await copyText(value);
       if (!mountedRef.current) return;
-      setFeedback({ id, message: `${label}已复制` });
+      show({ id, message: `${label}已复制` });
     } catch {
       if (!mountedRef.current) return;
-      setFeedback({ id: null, message: '暂时无法复制' });
+      show({ id: null, message: '暂时无法复制' });
     }
-    window.clearTimeout(timerRef.current);
-    timerRef.current = window.setTimeout(() => setFeedback({ id: null, message: '' }), 3000);
   };
 
-  return { copy, feedback };
+  const notify = (message, duration = 6000) => show({ id: null, message }, duration);
+
+  return { copy, notify, feedback };
 }

@@ -13,11 +13,20 @@ import {
 } from 'lucide-react';
 import { assetPath } from '../../assetPath';
 import { readStorage, writeStorage } from '../../storage';
+import {
+  PAN_STEP,
+  clampScenePosition,
+  getDraggedScenePosition,
+  getInitialScenePosition,
+  isHorizontalDrag,
+  isScenePannable,
+} from '../../scenePan';
 import MiniPlayer from '../MiniPlayer';
 
 const SCENE_SOURCES = [assetPath('/scene-optimized.jpg')];
 const SCRATCH_THRESHOLD = 0.6;
 const BRUSH_SIZE = 100;
+const REVEAL_LABELS_DURATION = 3200;
 
 const hotspots = [
   { id: 'vinyl', label: '先放首歌', target: '留声机', icon: Disc3, bounds: { x1: 3, x2: 24, y1: 30, y2: 82 } },
@@ -58,19 +67,24 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
   const scratchPointsRef = useRef([]);
   const hasReportedSceneReadyRef = useRef(false);
   const coverRef = useRef(null);
-  const scenePositionRef = useRef(0);
+  const scenePositionRef = useRef(null);
+  const panTweenRef = useRef(null);
+  const panDragRef = useRef(null);
+  const panFrameRef = useRef(0);
+  const suppressClickRef = useRef(false);
 
   const [sceneSrcIndex, setSceneSrcIndex] = useState(0);
   const [imageMeta, setImageMeta] = useState(null);
   const [sceneUnavailable, setSceneUnavailable] = useState(false);
   const [isComplete, setIsComplete] = useState(() => hasVisitedRef.current);
   const [isExploreReady, setIsExploreReady] = useState(() => hasVisitedRef.current);
+  const [isRevealingLabels, setIsRevealingLabels] = useState(false);
   const [hasScratched, setHasScratched] = useState(false);
   const [hotspotRects, setHotspotRects] = useState([]);
   const [hoveredModule, setHoveredModule] = useState(null);
   const [hintedModule, setHintedModule] = useState(null);
   const [visitedModules, setVisitedModules] = useState(() => new Set());
-  const [scenePosition, setScenePosition] = useState(0);
+  const [scenePosition, setScenePosition] = useState(0.5);
   const [canPanScene, setCanPanScene] = useState(false);
 
   const sceneSrc = SCENE_SOURCES[sceneSrcIndex];
@@ -82,14 +96,50 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
     onSceneReady?.();
   }, [onSceneReady]);
 
-  const resizeCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
+  // Positions the painting and its hotspots; cheap enough to run on every pan frame.
+  const layoutScene = useCallback(() => {
     const image = imageRef.current;
     const shell = shellRef.current;
-    if (!canvas || !image || !shell || !image.naturalWidth) return;
+    if (!image || !shell || !image.naturalWidth) return null;
 
     const width = shell.clientWidth;
     const height = shell.clientHeight;
+    const centred = getCoverGeometry(width, height, image.naturalWidth, image.naturalHeight, 0.5);
+    const isPannable = isScenePannable(width, centred.renderWidth);
+    if (!isPannable) scenePositionRef.current = null;
+    else if (scenePositionRef.current === null) scenePositionRef.current = getInitialScenePosition(width);
+
+    const position = isPannable ? scenePositionRef.current : 0.5;
+    const cover = isPannable
+      ? getCoverGeometry(width, height, image.naturalWidth, image.naturalHeight, position)
+      : centred;
+    coverRef.current = cover;
+    setCanPanScene(isPannable);
+    setScenePosition(position);
+    image.style.objectPosition = `${position * 100}% 50%`;
+
+    setHotspotRects(hotspots.map((hotspot) => {
+      const rect = {
+        left: cover.offsetX + (hotspot.bounds.x1 / 100) * cover.renderWidth,
+        top: cover.offsetY + (hotspot.bounds.y1 / 100) * cover.renderHeight,
+        width: ((hotspot.bounds.x2 - hotspot.bounds.x1) / 100) * cover.renderWidth,
+        height: ((hotspot.bounds.y2 - hotspot.bounds.y1) / 100) * cover.renderHeight,
+      };
+      const centre = rect.left + rect.width / 2;
+      return { ...hotspot, rect, isCentreOnScreen: centre > 72 && centre < width - 72 };
+    }));
+
+    return { cover, width, height };
+  }, []);
+
+  const resizeCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const layout = layoutScene();
+    if (!layout) return;
+
+    const { cover, width, height } = layout;
+    const image = imageRef.current;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
@@ -98,13 +148,6 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
 
     const context = canvas.getContext('2d', { willReadFrequently: true });
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    const isNarrow = width <= 600;
-    const position = isNarrow ? scenePositionRef.current : 0.5;
-    const cover = getCoverGeometry(width, height, image.naturalWidth, image.naturalHeight, position);
-    coverRef.current = cover;
-    setCanPanScene(isNarrow && cover.renderWidth > width + 1);
-    image.style.objectPosition = `${position * 100}% 50%`;
     context.clearRect(0, 0, width, height);
     if (!hasCompletedRef.current) {
       context.drawImage(image, cover.offsetX, cover.offsetY, cover.renderWidth, cover.renderHeight);
@@ -148,23 +191,10 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
       context.restore();
     }
 
-    const nextRects = hotspots.map((hotspot) => {
-      const rect = {
-        left: cover.offsetX + (hotspot.bounds.x1 / 100) * cover.renderWidth,
-        top: cover.offsetY + (hotspot.bounds.y1 / 100) * cover.renderHeight,
-        width: ((hotspot.bounds.x2 - hotspot.bounds.x1) / 100) * cover.renderWidth,
-        height: ((hotspot.bounds.y2 - hotspot.bounds.y1) / 100) * cover.renderHeight,
-      };
-
-      return { ...hotspot, rect };
-    });
-
-    setHotspotRects(nextRects);
-
     if (hasCompletedRef.current) {
       context.clearRect(0, 0, width, height);
     }
-  }, []);
+  }, [layoutScene]);
 
   const completeColoring = useCallback((animate = true) => {
     if (hasCompletedRef.current) return;
@@ -213,6 +243,8 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
       onComplete() {
         context.clearRect(0, 0, shell.clientWidth, shell.clientHeight);
         setIsExploreReady(true);
+        // Name each object once, right after the painting comes alive (touch screens have no hover).
+        setIsRevealingLabels(true);
       },
     });
   }, []);
@@ -225,18 +257,83 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
     setHasScratched(false);
     setIsComplete(false);
     setIsExploreReady(false);
+    setIsRevealingLabels(false);
+    panTweenRef.current?.kill();
     window.requestAnimationFrame(resizeCanvas);
   }, [resizeCanvas]);
 
   const panScene = (direction) => {
-    const nextPosition = Math.max(0, Math.min(1, scenePositionRef.current + direction * 0.5));
-    scenePositionRef.current = nextPosition;
-    setScenePosition(nextPosition);
-    window.requestAnimationFrame(resizeCanvas);
+    const from = scenePositionRef.current ?? 0.5;
+    const to = clampScenePosition(from + direction * PAN_STEP);
+    panTweenRef.current?.kill();
+
+    // The grey layer is redrawn per frame before colouring, so only glide once it is gone.
+    if (!hasCompletedRef.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      scenePositionRef.current = to;
+      window.requestAnimationFrame(hasCompletedRef.current ? layoutScene : resizeCanvas);
+      return;
+    }
+
+    const proxy = { value: from };
+    panTweenRef.current = gsap.to(proxy, {
+      value: to,
+      duration: 0.5,
+      ease: 'power2.inOut',
+      onUpdate() {
+        scenePositionRef.current = proxy.value;
+        layoutScene();
+      },
+    });
+  };
+
+  // After colouring, a horizontal drag on the painting pans it (phones and portrait tablets).
+  const handleScenePointerDown = (event) => {
+    if (!canPanScene || !hasCompletedRef.current || activeModule || !event.isPrimary) return;
+    if (event.target !== canvasRef.current && !event.target.closest('.main-canvas-hotspot')) return;
+    panTweenRef.current?.kill();
+    panDragRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      position: scenePositionRef.current ?? 0.5,
+      isDragging: false,
+    };
+  };
+
+  const handleScenePointerMove = (event) => {
+    const drag = panDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.x;
+    if (!drag.isDragging) {
+      if (!isHorizontalDrag(deltaX, event.clientY - drag.y)) return;
+      drag.isDragging = true;
+      shellRef.current?.setPointerCapture?.(event.pointerId);
+    }
+
+    const overflow = (coverRef.current?.renderWidth || 0) - (shellRef.current?.clientWidth || 0);
+    scenePositionRef.current = getDraggedScenePosition(drag.position, deltaX, overflow);
+    if (!panFrameRef.current) {
+      panFrameRef.current = window.requestAnimationFrame(() => {
+        panFrameRef.current = 0;
+        layoutScene();
+      });
+    }
+  };
+
+  const handleScenePointerEnd = (event) => {
+    const drag = panDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    panDragRef.current = null;
+    if (!drag.isDragging) return;
+    if (shellRef.current?.hasPointerCapture?.(event.pointerId)) shellRef.current.releasePointerCapture(event.pointerId);
+    // A drag that ends on a hotspot must not also open it.
+    suppressClickRef.current = true;
+    window.setTimeout(() => { suppressClickRef.current = false; }, 0);
   };
 
   const openModule = useCallback((moduleId) => {
     setHintedModule(null);
+    setIsRevealingLabels(false);
     setVisitedModules((current) => {
       if (current.has(moduleId)) return current;
       const next = new Set(current);
@@ -387,8 +484,42 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
     return () => window.removeEventListener('resize', resizeCanvas);
   }, [resizeCanvas]);
 
+  useEffect(() => () => {
+    panTweenRef.current?.kill();
+    window.cancelAnimationFrame(panFrameRef.current);
+  }, []);
+
   useEffect(() => {
-    if (!imageMeta || hotspotRects.length === 0) return undefined;
+    if (!isRevealingLabels) return undefined;
+    const revealTimer = window.setTimeout(() => setIsRevealingLabels(false), REVEAL_LABELS_DURATION);
+    return () => window.clearTimeout(revealTimer);
+  }, [isRevealingLabels]);
+
+  const hasHotspots = hotspotRects.length > 0;
+
+  // Hotspots mount only once the painting is coloured, which for first-time visitors
+  // happens after load; fading them in here keeps their hover labels from staying invisible.
+  useEffect(() => {
+    if (!imageMeta || !hasHotspots || !(isExploreReady || debugMode)) return undefined;
+
+    const context = gsap.context(() => {
+      const targets = gsap.utils.selector(shellRef)('.main-canvas-hotspot');
+      if (targets.length) {
+        gsap.fromTo(targets, { opacity: 0, scale: 0.96 }, {
+          opacity: 1,
+          scale: 1,
+          duration: 0.42,
+          stagger: 0.16,
+          ease: 'power2.out',
+        });
+      }
+    }, shellRef);
+
+    return () => context.revert();
+  }, [debugMode, hasHotspots, imageMeta, isExploreReady]);
+
+  useEffect(() => {
+    if (!imageMeta || !hasHotspots) return undefined;
 
     const context = gsap.context(() => {
       const select = gsap.utils.selector(shellRef);
@@ -397,13 +528,6 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
         if (targets.length) gsap.fromTo(targets, from, to);
       };
 
-      animate('.main-canvas-hotspot', { opacity: 0, scale: 0.96 }, {
-        opacity: 1,
-        scale: 1,
-        duration: 0.42,
-        stagger: 0.16,
-        ease: 'power2.out',
-      });
       animate('.gallery-identity', { opacity: 0, x: -12 }, {
         opacity: 1,
         x: 0,
@@ -429,7 +553,7 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
     }, shellRef);
 
     return () => context.revert();
-  }, [hotspotRects.length, imageMeta]);
+  }, [hasHotspots, imageMeta]);
 
   useEffect(() => {
     if (!isExploreReady || visitedModules.size > 0) return undefined;
@@ -449,7 +573,22 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
   const vinylHotspot = hotspotRects.find((hotspot) => hotspot.id === 'vinyl');
 
   return (
-    <section ref={shellRef} inert={isInactive} className="gallery-scene relative h-screen w-screen overflow-hidden bg-cream" style={{ cursor }}>
+    <section
+      ref={shellRef}
+      inert={isInactive}
+      className={`gallery-scene relative h-screen w-screen overflow-hidden bg-cream ${canPanScene && isComplete ? 'is-pannable' : ''}`}
+      style={{ cursor }}
+      onPointerDown={handleScenePointerDown}
+      onPointerMove={handleScenePointerMove}
+      onPointerUp={handleScenePointerEnd}
+      onPointerCancel={handleScenePointerEnd}
+      onClickCapture={(event) => {
+        if (!suppressClickRef.current) return;
+        suppressClickRef.current = false;
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+    >
       <img
         ref={imageRef}
         className="absolute inset-0 h-full w-full object-cover"
@@ -480,7 +619,7 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
       />
 
       <button
-        className="paint-action-button group absolute bottom-8 right-8 z-20"
+        className={`paint-action-button group absolute bottom-8 right-8 z-20 ${isComplete ? '' : 'is-labelled'}`}
         type="button"
         aria-label={isComplete ? '重新上色' : '一键上色'}
         onClick={() => (isComplete ? resetColoring() : completeColoring(true))}
@@ -503,13 +642,14 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
 
       {(isExploreReady || debugMode) && imageMeta && (
         <div className="pointer-events-none absolute inset-0 z-20">
-          {hotspotRects.map(({ id, label, target, rect }, index) => (
+          {hotspotRects.map(({ id, label, target, rect, isCentreOnScreen }, index) => (
             <button
               className={[
                 'main-canvas-hotspot group absolute rounded-[28px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warmGold/80',
                 debugMode ? 'border-2 border-red-500/85 bg-red-500/20 opacity-100' : 'opacity-0',
                 isExploreReady ? 'hover:cursor-pointer' : 'pointer-events-none',
                 hoveredModule === id || hintedModule === id ? 'is-linked' : '',
+                isRevealingLabels && isCentreOnScreen ? 'is-named' : '',
               ].join(' ')}
               type="button"
               key={id}
@@ -583,10 +723,10 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
 
       {canPanScene && !activeModule && (
         <div className="scene-pan-controls">
-          <button type="button" aria-label="向左看看" title="向左看看" disabled={scenePosition === 0} onClick={() => panScene(-1)}>
+          <button type="button" aria-label="向左看看" title="向左看看" disabled={scenePosition <= 0.001} onClick={() => panScene(-1)}>
             <ChevronLeft aria-hidden="true" size={22} />
           </button>
-          <button type="button" aria-label="向右看看" title="向右看看" disabled={scenePosition === 1} onClick={() => panScene(1)}>
+          <button type="button" aria-label="向右看看" title="向右看看" disabled={scenePosition >= 0.999} onClick={() => panScene(1)}>
             <ChevronRight aria-hidden="true" size={22} />
           </button>
         </div>

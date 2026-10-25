@@ -22,7 +22,12 @@ const channelIcons = {
 function ContactMailbox() {
   const [isLetterOpen, setIsLetterOpen] = useState(true);
   const mailtoHref = `mailto:${contactContent.address}`;
-  const { copy, feedback } = useCopyFeedback();
+  const { copy, notify, feedback } = useCopyFeedback();
+  // mailto does nothing visible when no mail app is set up, so point to the copy button.
+  const sendLetter = () => {
+    setIsLetterOpen(false);
+    notify('正在打开邮件应用；如果没有反应，可以复制邮箱地址。');
+  };
 
   return (
     <section className="contact-mailbox relative h-full w-full overflow-hidden p-8 text-sienna">
@@ -71,7 +76,7 @@ function ContactMailbox() {
               className="contact-delivery-button"
               href={mailtoHref}
               aria-label={`写邮件给 ${contactContent.address}`}
-              onClick={() => setIsLetterOpen(false)}
+              onClick={sendLetter}
             >
               <Send aria-hidden="true" size={16} strokeWidth={1.75} />
               <span>投递一封信</span>
@@ -94,7 +99,7 @@ function ContactMailbox() {
 
           <p className="contact-introduction relative z-10 mt-8 max-w-md text-[15px] leading-8 text-[#594838]">{contactContent.introduction}</p>
 
-          <a className="contact-letter-send relative z-10" href={mailtoHref} onClick={() => setIsLetterOpen(false)}>
+          <a className="contact-letter-send relative z-10" href={mailtoHref} onClick={sendLetter}>
             <Send aria-hidden="true" size={16} />
             <span>投递一封信</span>
           </a>
@@ -114,7 +119,7 @@ function ContactMailbox() {
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs text-taupe">{channel.label} / {channel.hint}</span>
                     {channel.id === 'email' ? (
-                      <a className="contact-address mt-0.5 block text-sm text-sienna" href={mailtoHref}>{channel.value}</a>
+                      <a className="contact-address mt-0.5 block text-sm text-sienna" href={mailtoHref} onClick={sendLetter}>{channel.value}</a>
                     ) : (
                       <span className="mt-0.5 block text-sm text-sienna">{channel.value}</span>
                     )}

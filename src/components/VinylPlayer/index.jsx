@@ -7,18 +7,19 @@ import {
   Pause,
   Play,
   Volume2,
-  X,
 } from 'lucide-react';
 import { musicList } from '../../data/siteContent';
 
-function VinylPlayer({ onClose, player }) {
+function VinylPlayer({ player }) {
   const {
     currentIndex,
     currentTrack,
     isPlaying,
+    isBuffering,
     duration,
     currentTime,
     volume,
+    canSetVolume,
     error,
     playTrack,
     togglePlayback,
@@ -36,20 +37,11 @@ function VinylPlayer({ onClose, player }) {
 
   return (
     <section className="vinyl-frame relative h-full w-full overflow-hidden bg-cream p-7 text-sienna">
-      <button
-        className="studio-close-button absolute right-5 top-5 z-50"
-        type="button"
-        aria-label="关闭"
-        onClick={onClose}
-      >
-        <X aria-hidden="true" size={18} strokeWidth={1.8} />
-      </button>
-
       <div className="relative z-10 grid h-full min-h-0 grid-cols-[1.08fr_0.92fr] gap-7">
         <div className="flex min-h-0 flex-col">
           <div className="turntable-stage relative flex min-h-0 flex-1 items-center justify-center rounded-[8px] p-6">
-            <div className="absolute bottom-6 h-16 w-[82%] rounded-[18px] bg-[linear-gradient(135deg,#8B7355,#A0522D_46%,#6c3e25)] shadow-[0_24px_42px_rgba(65,37,21,0.25)]" />
-            <div className="absolute bottom-16 h-7 w-[72%] rounded-full bg-[#E8D5B7]/30 blur-xl" />
+            <div className="turntable-base absolute bottom-6 h-16 w-[82%] rounded-[18px] bg-[linear-gradient(135deg,#8B7355,#A0522D_46%,#6c3e25)] shadow-[0_24px_42px_rgba(65,37,21,0.25)]" />
+            <div className="turntable-glow absolute bottom-16 h-7 w-[72%] rounded-full bg-[#E8D5B7]/30 blur-xl" />
 
             <motion.div
               className="vinyl-disc relative z-10 grid h-[292px] w-[292px] place-items-center rounded-full"
@@ -88,7 +80,7 @@ function VinylPlayer({ onClose, player }) {
             </motion.div>
 
             <motion.div
-              className="absolute right-[62px] top-[78px] z-20 h-52 w-24 origin-[78px_28px]"
+              className="vinyl-tone-arm absolute right-[62px] top-[78px] z-20 h-52 w-24 origin-[78px_28px]"
               animate={{ rotate: currentIndex !== null && isPlaying ? 22 : -7, y: isPlaying ? 8 : -8 }}
               transition={{ type: 'spring', stiffness: 90, damping: 15 }}
             >
@@ -109,13 +101,13 @@ function VinylPlayer({ onClose, player }) {
               </div>
             </div>
 
-            {error && <p className="mt-3 text-sm text-[#E8C6B7]">{error}</p>}
+            {error && <p className="mt-3 text-sm text-[#E8C6B7]" role="alert">{error}再点一次播放可重试。</p>}
 
             <div className="mt-4 flex items-center gap-3">
               <button className="vinyl-control-button" type="button" aria-label="上一首" onClick={playPrevious}>
                 <ChevronLeft aria-hidden="true" size={20} strokeWidth={1.8} />
               </button>
-              <button className="vinyl-play-button" type="button" onClick={togglePlayback}>
+              <button className="vinyl-play-button" type="button" aria-busy={isBuffering} onClick={togglePlayback}>
                 {isPlaying ? (
                   <Pause aria-hidden="true" size={16} fill="currentColor" />
                 ) : (
@@ -126,8 +118,8 @@ function VinylPlayer({ onClose, player }) {
               <button className="vinyl-control-button" type="button" aria-label="下一首" onClick={playNext}>
                 <ChevronRight aria-hidden="true" size={20} strokeWidth={1.8} />
               </button>
-              <div className="ml-auto text-sm tabular-nums text-cream/55">
-                {formatTime(currentTime)} / {formatTime(duration)}
+              <div className="ml-auto text-sm tabular-nums text-cream/55" aria-live="polite">
+                {isBuffering && isPlaying ? '载入中…' : `${formatTime(currentTime)} / ${formatTime(duration)}`}
               </div>
             </div>
 
@@ -143,20 +135,22 @@ function VinylPlayer({ onClose, player }) {
               style={{ '--range-progress': `${progressPercent}%` }}
             />
 
-            <div className="mt-2 flex items-center gap-3 text-sm text-cream/55">
-              <Volume2 aria-hidden="true" size={16} strokeWidth={1.8} />
-              <input
-                className="vinyl-volume w-44"
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={volume}
-                onChange={(event) => setVolume(event.target.value)}
-                aria-label="音量"
-                style={{ '--range-progress': `${volumePercent}%` }}
-              />
-            </div>
+            {canSetVolume && (
+              <div className="mt-2 flex items-center gap-3 text-sm text-cream/55">
+                <Volume2 aria-hidden="true" size={16} strokeWidth={1.8} />
+                <input
+                  className="vinyl-volume w-44"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={volume}
+                  onChange={(event) => setVolume(event.target.value)}
+                  aria-label="音量"
+                  style={{ '--range-progress': `${volumePercent}%` }}
+                />
+              </div>
+            )}
           </div>
         </div>
 

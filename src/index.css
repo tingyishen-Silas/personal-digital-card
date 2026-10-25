@@ -132,7 +132,32 @@ input:focus-visible {
 .contact-address:hover { text-decoration: underline; }
 .copy-feedback { min-height: 24px; margin: 6px 0 0; color: #56624f; font-size: 12px; }
 .contact-letter-send { display: none; }
-.scene-pan-controls { display: none; }
+
+.scene-pan-controls {
+  position: absolute;
+  inset: 48% 10px auto;
+  z-index: 26;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.scene-pan-controls button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid rgba(232, 213, 183, 0.4);
+  border-radius: 4px;
+  color: #f7ebd7;
+  background: rgba(37, 37, 32, 0.7);
+  pointer-events: auto;
+  touch-action: manipulation;
+  transition: opacity 180ms ease;
+}
+
+.scene-pan-controls button:disabled { opacity: 0; pointer-events: none; }
+.gallery-scene.is-pannable .main-canvas-hotspot { touch-action: none; }
 .scene-error { position: absolute; inset: 40% 16px auto; text-align: center; color: #594838; }
 
 .topic-detail-inline,
@@ -181,6 +206,11 @@ input:focus-visible {
   pointer-events: auto;
   touch-action: manipulation;
   transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.studio-close-button.is-on-frame {
+  top: 28px;
+  right: 28px;
 }
 
 .studio-close-button:hover {
@@ -523,12 +553,15 @@ input:focus-visible {
 }
 
 .paint-action-button:hover .paint-action-tooltip,
-.paint-action-button:focus-visible .paint-action-tooltip {
+.paint-action-button:focus-visible .paint-action-tooltip,
+.paint-action-button.is-labelled .paint-action-tooltip {
   opacity: 1;
   transform: translate(0, -50%);
 }
 
+/* Sits above the entry bar; at the same height the bar used to cover it. */
 .painting-hint {
+  bottom: 104px;
   border: 1px solid rgba(232, 213, 183, 0.46);
   border-radius: 8px;
   color: var(--color-cream);
@@ -558,7 +591,8 @@ input:focus-visible {
 
 .main-canvas-hotspot:hover .hotspot-label,
 .main-canvas-hotspot:focus-visible .hotspot-label,
-.main-canvas-hotspot.is-linked .hotspot-label {
+.main-canvas-hotspot.is-linked .hotspot-label,
+.main-canvas-hotspot.is-named .hotspot-label {
   opacity: 1;
   transform: translate(-50%, -50%);
 }
@@ -1812,6 +1846,8 @@ input:focus-visible {
 }
 
 .castle-archive-thumbnails {
+  /* Without this the rows shrink to fit the sidebar and the 4:3 thumbnails overlap. */
+  grid-auto-rows: max-content;
   scrollbar-width: thin;
   scrollbar-color: rgba(160, 82, 45, 0.35) transparent;
 }
@@ -2095,6 +2131,11 @@ input:focus-visible {
     top: 12px;
   }
 
+  .studio-close-button.is-on-frame {
+    right: 18px;
+    top: 18px;
+  }
+
   .about-easel,
   .topics-table,
   .contact-mailbox,
@@ -2362,28 +2403,6 @@ input:focus-visible {
 
   .gallery-mini-player { top: 88px; right: 16px; width: 230px; }
 
-  .scene-pan-controls {
-    position: absolute;
-    inset: 48% 10px auto;
-    z-index: 26;
-    display: flex;
-    justify-content: space-between;
-    pointer-events: none;
-  }
-
-  .scene-pan-controls button {
-    display: grid;
-    width: 44px;
-    height: 44px;
-    place-items: center;
-    border: 1px solid rgba(232, 213, 183, 0.4);
-    border-radius: 4px;
-    color: #f7ebd7;
-    background: rgba(37, 37, 32, 0.7);
-    pointer-events: auto;
-  }
-
-  .scene-pan-controls button:disabled { opacity: 0; pointer-events: none; }
   .gallery-identity {
     min-width: 0;
     left: 16px;
@@ -2438,7 +2457,7 @@ input:focus-visible {
     right: 16px;
   }
 
-  .paint-action-tooltip {
+  .paint-action-button:not(.is-labelled) .paint-action-tooltip {
     display: none;
   }
 
@@ -2449,6 +2468,36 @@ input:focus-visible {
   .contact-post-recipient {
     width: 150px;
   }
+
+  /* A smaller turntable lets the record list begin on the first screen. */
+  .turntable-stage {
+    min-height: 232px;
+  }
+
+  .vinyl-disc {
+    margin: -38px;
+    scale: 0.72;
+  }
+
+  .vinyl-tone-arm {
+    top: 36px;
+    right: auto;
+    left: calc(50% + 25px);
+    scale: 0.72;
+  }
+
+  .turntable-base {
+    bottom: 10px;
+    height: 48px;
+  }
+
+  .turntable-glow {
+    bottom: 44px;
+  }
+}
+
+@media (max-width: 340px) {
+  .paint-action-tooltip { display: none; }
 }
 
 @media (max-width: 360px) {

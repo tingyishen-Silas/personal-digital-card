@@ -5,7 +5,7 @@ Personal digital card website.
 ## Development
 
 - `npm run dev`: local preview.
-- `npm test`: asset, photo order, navigation and clipboard regression tests.
+- `npm test`: asset, photo order, navigation, clipboard, scene panning and lock-screen metadata regression tests.
 - `npm run build`: production build.
 
 ## Content

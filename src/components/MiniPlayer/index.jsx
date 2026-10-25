@@ -2,7 +2,7 @@ import { Disc3, Pause, Play } from 'lucide-react';
 
 export default function MiniPlayer({ player, onOpen }) {
   if (!player?.currentTrack) return null;
-  const { currentTrack, isPlaying, togglePlayback, error } = player;
+  const { currentTrack, isPlaying, isBuffering, togglePlayback, error } = player;
 
   return (
     <aside className="gallery-mini-player" aria-label={isPlaying ? '正在播放' : '音乐控制'}>
@@ -10,7 +10,7 @@ export default function MiniPlayer({ player, onOpen }) {
         <Disc3 className={isPlaying ? 'is-spinning' : ''} aria-hidden="true" size={23} strokeWidth={1.5} />
         <span>
           <strong>{currentTrack.title}</strong>
-          <small>{error || currentTrack.artist}</small>
+          <small>{error || (isBuffering && isPlaying ? '载入中…' : currentTrack.artist)}</small>
         </span>
       </button>
       <button

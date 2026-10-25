@@ -63,8 +63,11 @@ function DisneyCastle({ onArchiveChange, archivePostId, archiveImageIndex = 0, o
   useEffect(() => {
     setImageError(false);
     if (!selectedGallery.length) return;
-    const nextImage = new Image();
-    nextImage.src = selectedGallery[(selectedImageIndex + 1) % selectedGallery.length].src;
+    // Warm both neighbours so swiping either way shows the photo at once.
+    [1, -1].forEach((step) => {
+      const neighbour = new Image();
+      neighbour.src = selectedGallery[(selectedImageIndex + step + selectedGallery.length) % selectedGallery.length].src;
+    });
     thumbnailsRef.current?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [selectedGallery, selectedImageIndex]);
 
