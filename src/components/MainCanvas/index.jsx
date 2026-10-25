@@ -21,6 +21,8 @@ import {
   isHorizontalDrag,
   isScenePannable,
 } from '../../scenePan';
+import { FOCUS_DEPTH } from '../../livingPainting';
+import LivingPainting from '../LivingPainting';
 import MiniPlayer from '../MiniPlayer';
 
 const SCENE_SOURCES = [assetPath('/scene-optimized.jpg')];
@@ -72,6 +74,7 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
   const panDragRef = useRef(null);
   const panFrameRef = useRef(0);
   const suppressClickRef = useRef(false);
+  const hotspotLayerRef = useRef(null);
 
   const [sceneSrcIndex, setSceneSrcIndex] = useState(0);
   const [imageMeta, setImageMeta] = useState(null);
@@ -86,6 +89,7 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
   const [visitedModules, setVisitedModules] = useState(() => new Set());
   const [scenePosition, setScenePosition] = useState(0.5);
   const [canPanScene, setCanPanScene] = useState(false);
+  const [hotspotDepths, setHotspotDepths] = useState({});
 
   const sceneSrc = SCENE_SOURCES[sceneSrcIndex];
   const debugMode = useMemo(() => new URLSearchParams(window.location.search).get('debug') === '1', []);
@@ -130,6 +134,28 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
     }));
 
     return { cover, width, height };
+  }, []);
+
+  const getLayout = useCallback(() => {
+    const shell = shellRef.current;
+    if (!shell || !coverRef.current) return null;
+    return { width: shell.clientWidth, height: shell.clientHeight, cover: coverRef.current };
+  }, []);
+
+  // How far in front of / behind the still plane each object sits, so its hotspot moves with it.
+  // Averaged over the middle of each object so one background pixel cannot skew it.
+  const handleDepthReady = useCallback((depthAt) => {
+    setHotspotDepths(Object.fromEntries(hotspots.map(({ id, bounds }) => {
+      let total = 0;
+      for (let row = 0; row < 5; row += 1) {
+        for (let column = 0; column < 5; column += 1) {
+          const u = (bounds.x1 + (bounds.x2 - bounds.x1) * (0.2 + column * 0.15)) / 100;
+          const v = (bounds.y1 + (bounds.y2 - bounds.y1) * (0.2 + row * 0.15)) / 100;
+          total += depthAt(u, v);
+        }
+      }
+      return [id, total / 25 - FOCUS_DEPTH];
+    })));
   }, []);
 
   const resizeCanvas = useCallback(() => {
@@ -504,10 +530,10 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
 
     const context = gsap.context(() => {
       const targets = gsap.utils.selector(shellRef)('.main-canvas-hotspot');
+      // Opacity only: a GSAP transform tween would pin `translate: none` and stop the parallax.
       if (targets.length) {
-        gsap.fromTo(targets, { opacity: 0, scale: 0.96 }, {
+        gsap.fromTo(targets, { opacity: 0 }, {
           opacity: 1,
-          scale: 1,
           duration: 0.42,
           stagger: 0.16,
           ease: 'power2.out',
@@ -606,6 +632,16 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
         onError={handleImageError}
       />
 
+      <LivingPainting
+        active={isExploreReady && Boolean(imageMeta) && !sceneUnavailable}
+        paused={isInactive}
+        imageRef={imageRef}
+        getLayout={getLayout}
+        focusRect={hotspotRects.find(({ id }) => id === (hoveredModule || hintedModule))?.rect || null}
+        hotspotLayerRef={hotspotLayerRef}
+        onDepthReady={handleDepthReady}
+      />
+
       {sceneUnavailable && <p className="scene-error" role="status">画面暂时没能展开</p>}
 
       <canvas
@@ -641,7 +677,7 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
       )}
 
       {(isExploreReady || debugMode) && imageMeta && (
-        <div className="pointer-events-none absolute inset-0 z-20">
+        <div ref={hotspotLayerRef} className="pointer-events-none absolute inset-0 z-20">
           {hotspotRects.map(({ id, label, target, rect, isCentreOnScreen }, index) => (
             <button
               className={[
@@ -662,6 +698,7 @@ function MainCanvas({ activeModule, isInactive, isMusicPlaying = false, player, 
                 width: `${rect.width}px`,
                 height: `${rect.height}px`,
                 '--hotspot-delay': `${index * 0.18}s`,
+                '--depth-offset': hotspotDepths[id] ?? 0,
                 pointerEvents: isExploreReady ? 'auto' : 'none',
               }}
               onClick={() => openModule(id)}

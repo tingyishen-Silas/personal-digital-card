@@ -43,41 +43,45 @@ function VinylPlayer({ player }) {
             <div className="turntable-base absolute bottom-6 h-16 w-[82%] rounded-[18px] bg-[linear-gradient(135deg,#8B7355,#A0522D_46%,#6c3e25)] shadow-[0_24px_42px_rgba(65,37,21,0.25)]" />
             <div className="turntable-glow absolute bottom-16 h-7 w-[72%] rounded-full bg-[#E8D5B7]/30 blur-xl" />
 
-            <motion.div
-              className="vinyl-disc relative z-10 grid h-[292px] w-[292px] place-items-center rounded-full"
-              animate={{
-                rotate: isPlaying ? 360 : 0,
-                scale: currentIndex === null ? 0.97 : 1,
-              }}
-              transition={{
-                rotate: isPlaying
-                  ? { duration: 5.2, repeat: Infinity, ease: 'linear' }
-                  : { duration: 1.2, ease: 'easeOut' },
-                scale: { duration: 0.35, ease: 'easeOut' },
-              }}
-            >
-              <div className="absolute inset-5 rounded-full border border-white/10" />
-              <div className="absolute inset-12 rounded-full border border-white/10" />
-              <div className="absolute inset-20 rounded-full border border-white/10" />
-              <div className="vinyl-highlight absolute left-16 top-10 h-28 w-10 rotate-45 rounded-full" />
-              <AnimatePresence mode="wait">
-                <motion.div
-                  className="vinyl-center-label absolute z-10 grid h-28 w-28 place-items-center rounded-full"
-                  key={displayTrack.id}
-                  initial={{ opacity: 0, scale: 0.72 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.82 }}
-                  transition={{ duration: 0.34, ease: 'easeOut' }}
-                >
-                  <img
-                    className="h-[84px] w-[84px] rounded-full object-cover"
-                    src={displayTrack.cover}
-                    alt=""
-                  />
-                </motion.div>
-              </AnimatePresence>
-              <div className="absolute h-5 w-5 rounded-full bg-[#E8D5B7] shadow-inner" />
-            </motion.div>
+            <div className="vinyl-disc-wrap relative z-10">
+              <motion.div
+                className="vinyl-disc relative grid h-[292px] w-[292px] place-items-center rounded-full"
+                animate={{
+                  rotate: isPlaying ? 360 : 0,
+                  scale: currentIndex === null ? 0.97 : 1,
+                }}
+                transition={{
+                  rotate: isPlaying
+                    ? { duration: 5.2, repeat: Infinity, ease: 'linear' }
+                    : { duration: 1.2, ease: 'easeOut' },
+                  scale: { duration: 0.35, ease: 'easeOut' },
+                }}
+              >
+                <div className="absolute inset-5 rounded-full border border-white/10" />
+                <div className="absolute inset-12 rounded-full border border-white/10" />
+                <div className="absolute inset-20 rounded-full border border-white/10" />
+                <div className="vinyl-highlight absolute left-16 top-10 h-28 w-10 rotate-45 rounded-full" />
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    className="vinyl-center-label absolute z-10 grid h-28 w-28 place-items-center rounded-full"
+                    key={displayTrack.id}
+                    initial={{ opacity: 0, scale: 0.72 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.82 }}
+                    transition={{ duration: 0.34, ease: 'easeOut' }}
+                  >
+                    <img
+                      className="h-[84px] w-[84px] rounded-full object-cover"
+                      src={displayTrack.cover}
+                      alt=""
+                    />
+                  </motion.div>
+                </AnimatePresence>
+                <div className="absolute h-5 w-5 rounded-full bg-[#E8D5B7] shadow-inner" />
+              </motion.div>
+              {/* Stays still while the record spins, like a lamp reflected in the grooves. */}
+              <div className="vinyl-sheen pointer-events-none absolute inset-0 rounded-full" aria-hidden="true" />
+            </div>
 
             <motion.div
               className="vinyl-tone-arm absolute right-[62px] top-[78px] z-20 h-52 w-24 origin-[78px_28px]"

@@ -20,11 +20,62 @@ import { castleContent } from '../../data/siteContent';
 import castleWatercolor from '../../assets/castle-watercolor.png';
 import { getSwipeDirection } from '../../galleryNavigation';
 import useCopyFeedback from '../../useCopyFeedback';
+import usePointerTilt from '../../usePointerTilt';
+
+// Photos turn in the direction you travel, like leafing through prints on a table.
+const photoTurn = {
+  enter: (direction) => ({ opacity: 0, x: direction * 56, rotateY: direction * -16, scale: 0.97 }),
+  centre: { opacity: 1, x: 0, rotateY: 0, scale: 1 },
+  exit: (direction) => ({ opacity: 0, x: direction * -56, rotateY: direction * 16, scale: 0.97 }),
+};
+
+function CastlePost({ post, index, onOpen }) {
+  const { tiltStyle, glareStyle, tiltHandlers } = usePointerTilt(5);
+  const postImage = post.image === 'castle' ? castleWatercolor : post.image;
+  const PostElement = post.gallery ? motion.button : motion.article;
+
+  return (
+    <PostElement
+      className={`castle-post ${post.draft ? 'is-draft' : ''} ${post.featured ? 'is-featured' : ''} ${post.gallery ? 'is-openable' : ''}`}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.12 + index * 0.08, duration: 0.35 }}
+      {...(post.gallery ? {
+        type: 'button',
+        onClick: (event) => onOpen(post, event.currentTarget),
+        'aria-label': `打开档案：${post.title}`,
+        style: tiltStyle,
+        ...tiltHandlers,
+      } : {})}
+    >
+      <div className="castle-post-image">
+        {postImage ? (
+          <img src={postImage} alt={post.gallery ? `${post.title}档案封面` : ''} />
+        ) : (
+          <ImagePlus aria-hidden="true" size={21} strokeWidth={1.35} />
+        )}
+      </div>
+      <div className="castle-post-copy">
+        <span className="castle-post-date">{post.date}</span>
+        <h3>{post.title}</h3>
+        {post.summary && <p>{post.summary}</p>}
+        {post.gallery && (
+          <span className="castle-post-open-hint">
+            <Images aria-hidden="true" size={12} strokeWidth={1.7} />
+            {post.gallery.length} 张照片
+          </span>
+        )}
+      </div>
+      {post.gallery && <motion.span className="tilt-glare absolute inset-0" style={glareStyle} aria-hidden="true" />}
+    </PostElement>
+  );
+}
 
 function DisneyCastle({ onArchiveChange, archivePostId, archiveImageIndex = 0, onOpenArchive, onCloseArchive, onArchiveImageChange }) {
   const [isNight, setIsNight] = useState(true);
   const [archiveHost, setArchiveHost] = useState(null);
   const [imageError, setImageError] = useState(false);
+  const [turnDirection, setTurnDirection] = useState(1);
   const sectionRef = useRef(null);
   const archiveRef = useRef(null);
   const archiveTriggerRef = useRef(null);
@@ -49,10 +100,12 @@ function DisneyCastle({ onArchiveChange, archivePostId, archiveImageIndex = 0, o
   }, [onCloseArchive]);
 
   const showPreviousImage = useCallback(() => {
+    setTurnDirection(-1);
     onArchiveImageChange((selectedImageIndex - 1 + selectedGallery.length) % selectedGallery.length);
   }, [onArchiveImageChange, selectedGallery.length, selectedImageIndex]);
 
   const showNextImage = useCallback(() => {
+    setTurnDirection(1);
     onArchiveImageChange((selectedImageIndex + 1) % selectedGallery.length);
   }, [onArchiveImageChange, selectedGallery.length, selectedImageIndex]);
 
@@ -182,44 +235,9 @@ function DisneyCastle({ onArchiveChange, archivePostId, archiveImageIndex = 0, o
           <p className="castle-journal-introduction relative z-10 mt-4 max-w-md text-sm leading-6 text-[#594838]">{castleContent.introduction}</p>
 
           <div className="castle-post-feed relative z-10 mt-5 grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto pr-1">
-            {publishedPosts.map((post, index) => {
-              const postImage = post.image === 'castle' ? castleWatercolor : post.image;
-              const PostElement = post.gallery ? motion.button : motion.article;
-
-              return (
-                <PostElement
-                  className={`castle-post ${post.draft ? 'is-draft' : ''} ${post.featured ? 'is-featured' : ''} ${post.gallery ? 'is-openable' : ''}`}
-                  key={post.id}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.12 + index * 0.08, duration: 0.35 }}
-                  {...(post.gallery ? {
-                    type: 'button',
-                    onClick: (event) => openArchive(post, event.currentTarget),
-                    'aria-label': `打开档案：${post.title}`,
-                  } : {})}
-                >
-                  <div className="castle-post-image">
-                    {postImage ? (
-                      <img src={postImage} alt={post.gallery ? `${post.title}档案封面` : ''} />
-                    ) : (
-                      <ImagePlus aria-hidden="true" size={21} strokeWidth={1.35} />
-                    )}
-                  </div>
-                  <div className="castle-post-copy">
-                    <span className="castle-post-date">{post.date}</span>
-                    <h3>{post.title}</h3>
-                    {post.summary && <p>{post.summary}</p>}
-                    {post.gallery && (
-                      <span className="castle-post-open-hint">
-                        <Images aria-hidden="true" size={12} strokeWidth={1.7} />
-                        {post.gallery.length} 张照片
-                      </span>
-                    )}
-                  </div>
-                </PostElement>
-              );
-            })}
+            {publishedPosts.map((post, index) => (
+              <CastlePost key={post.id} post={post} index={index} onOpen={openArchive} />
+            ))}
           </div>
 
           <p className="castle-closing relative z-10 mt-4 text-sm italic leading-6 text-[#745a42]">{castleContent.closing}</p>
@@ -298,17 +316,19 @@ function DisneyCastle({ onArchiveChange, archivePostId, archiveImageIndex = 0, o
                       <button type="button" onClick={() => setImageError(false)}>重试</button>
                     </div>
                   ) : (
-                  <AnimatePresence mode="wait">
+                  <AnimatePresence initial={false} custom={turnDirection}>
                     <motion.img
                       key={selectedImage.src}
                       src={selectedImage.src}
                       alt={selectedImage.alt}
                       draggable="false"
                       onError={() => setImageError(true)}
-                      initial={{ opacity: 0, scale: 1.018 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.28, ease: 'easeOut' }}
+                      custom={turnDirection}
+                      variants={photoTurn}
+                      initial="enter"
+                      animate="centre"
+                      exit="exit"
+                      transition={{ duration: 0.42, ease: [0.22, 0.8, 0.3, 1] }}
                     />
                   </AnimatePresence>
                   )}
@@ -350,7 +370,10 @@ function DisneyCastle({ onArchiveChange, archivePostId, archiveImageIndex = 0, o
                         aria-label={`查看第 ${index + 1} 张：${image.caption}`}
                         aria-pressed={index === selectedImageIndex}
                         key={image.src}
-                        onClick={() => onArchiveImageChange(index)}
+                        onClick={() => {
+                          setTurnDirection(index < selectedImageIndex ? -1 : 1);
+                          onArchiveImageChange(index);
+                        }}
                       >
                         <img src={image.src} alt="" loading="lazy" />
                         <span>{String(index + 1).padStart(2, '0')}</span>

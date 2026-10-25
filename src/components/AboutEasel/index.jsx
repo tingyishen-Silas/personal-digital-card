@@ -1,8 +1,11 @@
 import { motion } from 'framer-motion';
 import { Brush, Heart, Palette, Sparkles } from 'lucide-react';
 import { aboutContent } from '../../data/siteContent';
+import usePointerTilt from '../../usePointerTilt';
 
 function AboutEasel() {
+  const { tiltStyle, glareStyle, tiltHandlers } = usePointerTilt(9);
+
   return (
     <section className="about-easel relative h-full w-full overflow-hidden p-7 text-sienna">
       <div className="about-easel-wash absolute inset-0" aria-hidden="true" />
@@ -14,13 +17,14 @@ function AboutEasel() {
             <span>my little studio</span>
           </div>
 
-          <div className="relative mx-auto flex w-full max-w-[330px] flex-1 items-center justify-center">
+          <div className="relative mx-auto flex w-full max-w-[330px] flex-1 items-center justify-center" {...tiltHandlers}>
             <div className="about-easel-legs absolute bottom-2 h-24 w-48" aria-hidden="true" />
             <motion.figure
               className="about-canvas relative z-10 h-[min(29vw,278px)] w-[min(24vw,230px)] min-h-[240px] min-w-[198px] overflow-hidden rounded-[3px] p-3"
               initial={{ opacity: 0, rotate: -2.5, y: 14 }}
               animate={{ opacity: 1, rotate: -1, y: 0 }}
               transition={{ duration: 0.6, ease: 'easeOut' }}
+              style={tiltStyle}
             >
               <img
                 className="absolute inset-3 h-[calc(100%-24px)] w-[calc(100%-24px)] object-cover object-[50%_32%]"
@@ -32,6 +36,7 @@ function AboutEasel() {
                 <p className="font-title text-[clamp(31px,3.4vw,46px)] italic leading-none">{aboutContent.name.split(' ')[0]}</p>
               </figcaption>
               <span className="about-canvas-mark absolute right-6 top-6"><Brush aria-hidden="true" size={17} strokeWidth={1.6} /></span>
+              <motion.span className="tilt-glare absolute inset-3" style={glareStyle} aria-hidden="true" />
             </motion.figure>
           </div>
 

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { getTrackMetadata } from '../src/mediaSession.js';
 import { musicList } from '../src/data/siteContent.js';
@@ -51,5 +53,22 @@ test('lock-screen metadata uses the real title, artist and an absolute cover URL
     assert.equal(metadata.title, track.title);
     assert.equal(metadata.artist, track.artist);
     assert.match(metadata.artwork[0].src, /^https:\/\/tingyishen-silas\.github\.io\/.*cover-0\d\.jpg$/);
+  }
+});
+
+test('living painting eases smoothly and tilts the right way', async () => {
+  const { approach, getParallaxShift } = await import('../src/livingPainting.js');
+  // Frame-rate independent: two half steps land where one full step does.
+  const oneStep = approach(0, 1, 3, 0.1);
+  const twoSteps = approach(approach(0, 1, 3, 0.05), 1, 3, 0.05);
+  assert.ok(Math.abs(oneStep - twoSteps) < 1e-9);
+  assert.equal(approach(0.4, 0.4, 3, 1), 0.4);
+  // Centre is still; looking from the right moves the near tables left.
+  assert.deepEqual(getParallaxShift(0.5, 0.5, 0.02), { x: -0, y: -0 });
+  assert.ok(getParallaxShift(1, 0.5, 0.02).x < 0);
+  assert.ok(Math.abs(getParallaxShift(1, 1, 0.02).y) < Math.abs(getParallaxShift(1, 1, 0.02).x));
+  // The depth map and linen normal map ship with the site.
+  for (const asset of ['scene-depth.jpg', 'canvas-linen-normal.jpg']) {
+    assert.ok(existsSync(fileURLToPath(new URL(`../public/${asset}`, import.meta.url))), `Missing ${asset}`);
   }
 });

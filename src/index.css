@@ -158,6 +158,27 @@ input:focus-visible {
 
 .scene-pan-controls button:disabled { opacity: 0; pointer-events: none; }
 .gallery-scene.is-pannable .main-canvas-hotspot { touch-action: none; }
+
+/* The lit, depth-aware painting fades in over the plain one once colouring finishes. */
+.living-painting {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1200ms ease;
+}
+
+.living-painting.is-visible { opacity: 1; }
+
+/* The rendered spotlight replaces the CSS glow box while the living painting is on. */
+.living-painting.is-visible ~ div .main-canvas-hotspot:is(:hover, .is-linked) {
+  box-shadow: none !important;
+}
+
+/* Hotspots follow the parallax by their own depth (set from the depth map). */
+.main-canvas-hotspot {
+  translate:
+    calc(var(--parallax-x, 0px) * var(--depth-offset, 0))
+    calc(var(--parallax-y, 0px) * var(--depth-offset, 0));
+}
 .scene-error { position: absolute; inset: 40% 16px auto; text-align: center; color: #594838; }
 
 .topic-detail-inline,
@@ -253,6 +274,22 @@ input:focus-visible {
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.32),
     inset 0 18px 36px rgba(255, 255, 255, 0.13);
+}
+
+/* A still reflection across the spinning grooves; the label stays clear. */
+.vinyl-sheen {
+  background: conic-gradient(
+    from 300deg,
+    transparent 0deg,
+    rgba(255, 238, 210, 0.13) 18deg,
+    transparent 46deg,
+    transparent 180deg,
+    rgba(255, 238, 210, 0.09) 198deg,
+    transparent 226deg
+  );
+  mix-blend-mode: screen;
+  -webkit-mask: radial-gradient(circle, transparent 0 20%, #000 21% 97%, transparent 98%);
+  mask: radial-gradient(circle, transparent 0 20%, #000 21% 97%, transparent 98%);
 }
 
 .vinyl-disc {
@@ -1604,6 +1641,9 @@ input:focus-visible {
 }
 
 .castle-post.is-openable {
+  position: relative;
+  /* Framer drives the tilt transform; a CSS transition on it would only add lag. */
+  transition: border-color 180ms ease, box-shadow 180ms ease;
   width: 100%;
   padding: 0;
   text-align: left;
@@ -1779,10 +1819,24 @@ input:focus-visible {
   box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.24);
 }
 
+.castle-archive-viewer {
+  perspective: 1100px;
+}
+
+/* Stacked so the outgoing and incoming photos can turn past each other. */
 .castle-archive-viewer > img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* Varnish glare that follows the cursor across tilting objects. */
+.tilt-glare {
+  z-index: 2;
+  pointer-events: none;
+  mix-blend-mode: screen;
 }
 
 .castle-archive-viewer figcaption {
@@ -2016,9 +2070,12 @@ input:focus-visible {
   animation: hotspot-flash 0.7s ease-out var(--hotspot-delay, 0s) 2;
 }
 
+/* Keeping the intro flash in the list stops it replaying every time the hover ends. */
 .main-canvas-hotspot:hover,
 .main-canvas-hotspot.is-linked {
-  animation: hotspot-breathe 2.4s ease-in-out infinite !important;
+  animation:
+    hotspot-flash 0.7s ease-out var(--hotspot-delay, 0s) 2,
+    hotspot-breathe 2.4s ease-in-out infinite !important;
 }
 
 @keyframes gallery-index-hint {
@@ -2474,7 +2531,7 @@ input:focus-visible {
     min-height: 232px;
   }
 
-  .vinyl-disc {
+  .vinyl-disc-wrap {
     margin: -38px;
     scale: 0.72;
   }
